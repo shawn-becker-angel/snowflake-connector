@@ -48,7 +48,20 @@ install the pandas extension:
 `pip install pandas`
 `pip install python-dotenv`
 
-## Coding with pandas (if pandas is working)
+## Run the validator to check the connection
+
+```python
+python validate.py
+```
+
+## Run the sample app
+
+```python
+python app.py
+```
+
+
+## Coding example (with pandas if pandas is working)
 
 Use `fetch_pandas_batches()` to fetch snowflake data into batched dataframes
 
@@ -56,7 +69,7 @@ Use `fetch_pandas_batches()` to fetch snowflake data into batched dataframes
     import pandas as pd
     def fetch_pandas(cur, sql):
         batch_size = 1_000
-        
+
         cur.execute(sql)
 
         start = perf_counter()
@@ -74,7 +87,7 @@ Use `fetch_pandas_batches()` to fetch snowflake data into batched dataframes
         print(f"fetched rows:{rows} in batches:{batch_no} in {elapsed:10.3f} secs")
 ```
 
-## Coding without pandas (if pandas is not available)
+## Coding example (without pandas if pandas is not working)
 
 ```python
     import snowflake.connector as connector
