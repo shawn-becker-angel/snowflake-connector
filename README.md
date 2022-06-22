@@ -45,7 +45,8 @@ install other packages:
 
 install the pandas package and extension:  (not yet working for Apple M1 pro chip)  
 `pip install pandas`  
-`pip install "snowflake-connector-python[pandas]"`
+`pip install "snowflake-connector-python[pandas]"`  
+**see open Apple M1 pro chip issue at: https://github.com/snowflakedb/snowflake-connector-python/issues/986**
 
 ## Run the validator to check the connector version from snowflake  
 
@@ -58,7 +59,7 @@ install the pandas package and extension:  (not yet working for Apple M1 pro chi
 `...`  
 `fetched 42548 rows in 4255 batches in  1.769 seconds`  
 
-## Coding example (with pandas if pandas is working)
+## Coding example (with pandas if pandas is working)  
 
 Use `fetch_pandas_batches()` to fetch snowflake data into batched dataframes
 
