@@ -40,26 +40,20 @@ use the requirements-3.9.txt file to install all tested dependencies:
 check the version of the python connector from the last line of the requirements file:  
 `tail -n 1 requirements-3.9.txt`
 
-install the pandas extension:  
-`pip install "snowflake-connector-python[pandas]"`
-
-## Install other packages
-
-`pip install pandas`
+install other packages:  
 `pip install python-dotenv`
+
+install the pandas package and extension:  (not yet working for Apple M1 pro chip)
+`pip install pandas`  
+`pip install "snowflake-connector-python[pandas]"`
 
 ## Run the validator to check the connection
 
-```python
-python validate.py
-```
+`python validate.py`
 
 ## Run the sample app
 
-```python
-python app.py
-```
-
+`python app.py`
 
 ## Coding example (with pandas if pandas is working)
 
