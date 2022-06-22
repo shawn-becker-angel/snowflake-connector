@@ -4,7 +4,7 @@ import snowflake.connector
 from constants import *
 
 # Gets the version
-ctx = snowflake.connector.connect(
+conn = snowflake.connector.connect(
     user=USER_NAME,
     password=USER_PSWD,
     account=ACCOUNT,
@@ -12,11 +12,11 @@ ctx = snowflake.connector.connect(
     database=DATABASE,
     schema=SCHEMA
     )
-cs = ctx.cursor()
+curs = conn.cursor()
 try:
-    cs.execute("SELECT current_version()")
-    one_row = cs.fetchone()
-    print(one_row[0])
+    curs.execute("SELECT current_version()")
+    one_row = curs.fetchone()
+    print("snowflake.connector version:", one_row[0])
 finally:
-    cs.close()
-ctx.close()
+    curs.close()
+conn.close()

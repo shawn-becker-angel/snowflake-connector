@@ -43,17 +43,20 @@ check the version of the python connector from the last line of the requirements
 install other packages:  
 `pip install python-dotenv`
 
-install the pandas package and extension:  (not yet working for Apple M1 pro chip)
+install the pandas package and extension:  (not yet working for Apple M1 pro chip)  
 `pip install pandas`  
 `pip install "snowflake-connector-python[pandas]"`
 
-## Run the validator to check the connection
+## Run the validator to check the connector version from snowflake  
 
-`python validate.py`
+`> python validate.py`  
+`snowflake.connector version: 6.19.0`  
 
-## Run the sample app
+## Run the example app
 
-`python app.py`
+`> python example.py`  
+`...`  
+`fetched 42548 rows in 4255 batches in  1.769 seconds`  
 
 ## Coding example (with pandas if pandas is working)
 
@@ -81,7 +84,7 @@ Use `fetch_pandas_batches()` to fetch snowflake data into batched dataframes
         print(f"fetched rows:{rows} in batches:{batch_no} in {elapsed:10.3f} secs")
 ```
 
-## Coding example (without pandas if pandas is not working)
+## Coding example (without pandas if pandas is not working)  
 
 ```python
     import snowflake.connector as connector
