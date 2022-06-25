@@ -1,5 +1,9 @@
 import os
 from dotenv import load_dotenv
+
+if not os.path.isfile(".env"):
+    raise Exception("local .env file not found")
+
 load_dotenv()
 
 USER_NAME = os.getenv('USER_NAME')
