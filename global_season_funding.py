@@ -9,6 +9,10 @@ import pprint
 # adapted from postgresql code at 
 # https://github.com/Angel-Studios/chosen-hydra/blob/master/lib/chosen_hydra/jobs/global_season_funding.ex#L109-L156
 
+# NOTE
+# NOTE THAT THIS snowflake-python version DOES NOT YET IMPLEMENT THE FIRST 89 LINES of global_season_funding.ex
+# NOTE
+
 # from STITCH__HYDRABIM__MARKET_PURCHASEDOFFER as p
 # join STITCH__HYDRABIM__MARKET_ORDER
 
