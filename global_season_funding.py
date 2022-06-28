@@ -191,37 +191,37 @@ def calc_funding_df(conn):
         except Exception as err:
             print(f"Error: {type(err)} {str(err)}")
             
-def rollback_episode(result):
-    episode_percent_completed = result['episode_percent_complete']
-    number_of_episodes = result['number_of_episodes']
+# def rollback_episode(result):
+#     episode_percent_completed = result['episode_percent_complete']
+#     number_of_episodes = result['number_of_episodes']
 
-    previous_results = ChosenHydra.Jobs.GlobalSeasonFunding.funding()
+#     previous_results = ChosenHydra.Jobs.GlobalSeasonFunding.funding()
 
-    if result['episode_currently_funding'] == 1:
-        updated_results = {
-            "episode_percent_complete" : 100,
-            "episode_currently_funding" : number_of_episodes,
-            "season_currently_funding" : result["season_currently_funding"] - 1,
-            "episode_raised" : math.trunc(result["episode_cost"]),
-            "progress" : 100,
-            "time_left" : 0,
-            "days" : 0,
-            "total_amount_raised" : math.trunc(number_of_episodes * result["episode_cost"]),
-            "episode_funding_in" : 0,
-            "episode_backers" : previous_results["episode_backers"]
-        }
+#     if result['episode_currently_funding'] == 1:
+#         updated_results = {
+#             "episode_percent_complete" : 100,
+#             "episode_currently_funding" : number_of_episodes,
+#             "season_currently_funding" : result["season_currently_funding"] - 1,
+#             "episode_raised" : math.trunc(result["episode_cost"]),
+#             "progress" : 100,
+#             "time_left" : 0,
+#             "days" : 0,
+#             "total_amount_raised" : math.trunc(number_of_episodes * result["episode_cost"]),
+#             "episode_funding_in" : 0,
+#             "episode_backers" : previous_results["episode_backers"]
+#         }
 
-        current_episode = {
-            "episode_percent_complete" : 100,
-            "episode_currently_funding" : current_episode - 1,
-            "episode_raised" : math.trunc(result["episode_cost"]),
-            "time_left" : 0,
-            "days" : 0,
-            "total_amount_raised" : math.trunc((current_episode - 1) * result["episode_cost"]),
-            "episode_funding_in" : 0,
-            "episode_backers" : previous_results["episode_backers"]
-        }
-    map.merge(result, updated_results)
+#         current_episode = {
+#             "episode_percent_complete" : 100,
+#             "episode_currently_funding" : current_episode - 1,
+#             "episode_raised" : math.trunc(result["episode_cost"]),
+#             "time_left" : 0,
+#             "days" : 0,
+#             "total_amount_raised" : math.trunc((current_episode - 1) * result["episode_cost"]),
+#             "episode_funding_in" : 0,
+#             "episode_backers" : previous_results["episode_backers"]
+#         }
+#     map.merge(result, updated_results) # ??
 
 def main():
     
@@ -247,11 +247,11 @@ def main():
             result = calc_funding_result(df)
             pprint.pprint(result)
 
-            # if episode is <1% funded, then instead show previous episode as fully funded
-            result = rollback_episode(result)
-            pprint.pprint(result)
+            # # if episode is <1% funded, then instead show previous episode as fully funded
+            # result = rollback_episode(result)
+            # pprint.pprint(result)
 
-            ChosenHydra.Jobs.GlobalSeasonFunding.refresh(result)
+            # ChosenHydra.Jobs.GlobalSeasonFunding.refresh(result)
             
     except Exception as err:
         print(f"Error: {type(err)} {str(err)}")
