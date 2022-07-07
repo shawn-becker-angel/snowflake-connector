@@ -219,14 +219,14 @@ SELECT  count(*) FROM "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."IDENTIFIES" where ano
 SELECT  count(*) FROM "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."IDENTIFIES";
 -- 7639666
 
--- IDENTIFIES SUMMARY
+-- SUMMARY of SEGMENT.PERSONAS_THE_CHOSEN_WEB.IDENTIFIES records:
 -- current_timestamp() 2022-07-05 17:11:08.972 +0000
--- total records                                                  7652120
+-- total records                                                7_652_120 
 -- total with null user_ids                                           487
--- total with non-null anonymous_ids                                30401
--- total with null anonymous_ids                                  7621719
--- total with non-null user_ids and non-null anonymous_ids          29914
--- total with non-null user_ids and null anonymous_ids            7621719
+-- total with non-null anonymous_ids                               30_401
+-- total with null anonymous_ids                                7_621_719
+-- total with non-null user_ids and non-null anonymous_ids         29_914
+-- total with non-null user_ids and null anonymous_ids          7_621_719
 -- total with null user_ids and null anonymous_ids                      0
 
 -- total number of distinct user_ids                              6220427
@@ -275,11 +275,9 @@ ORDER BY count(*) DESC
 -- 8268 groups of IDENTIFIES records share 25 or more user_ids
 -- 826461 groups of IDENTIFIES records share at least 2 user_ids
 
-
-
--- distinct segment user_id:                                      6220427
--- distinct segment personas with no matching ellis_island uuid:  5321719 85.6%
--- distinct segment personas with matching ellis_island uuid:      898708 14.4%
+-- distinct segment user_id:                                      6_220_427
+-- distinct segment personas with no matching ellis_island uuid:  5_321_719 85.6%
+-- distinct segment personas with matching ellis_island uuid:       898_708 14.4%
 
 
 
@@ -338,7 +336,7 @@ Personas Profile API supports finding profiles by external ids (ip_address, user
 However, how to can we get external ids for all personas?
 
 */
--- IDEA: find LOOKER_SOURCE tables or views that have email columns
+-- IDEA: find all LOOKER_SOURCE SEGMENT tables or views that have columns "EMAIL" that do not contain "WEB", "PIF", "NFT", "DEV" or "STAGING"
 use warehouse LOOKER_WH;
 use database LOOKER_SOURCE;
 use schema INFORMATION_SCHEMA;
