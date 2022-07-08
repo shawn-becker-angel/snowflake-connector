@@ -18,13 +18,13 @@ def main():
         account=ACCOUNT,
         warehouse=WAREHOUSE,
         database=DATABASE,
-        schema='INFORMATION_SCHEMA',
+        schema=SCHEMA,
         protocol='https',
         port=PORT
         )
     cur = conn.cursor()
     try:
-        cur.execute("SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, DATA_TYPE from COLUMNS")
+        cur.execute("SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, DATA_TYPE from LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS")
         query_id = cur.sfqid
         while conn.is_still_running(conn.get_query_status(query_id)):
             print("waiting")

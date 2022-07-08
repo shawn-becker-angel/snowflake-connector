@@ -7,6 +7,7 @@ from time import sleep, perf_counter
 from typing import Set, List, Dict
 import datetime
 
+timeout = 10
 all_key_columns_set = set(["ANONYMOUS_ID", "USER_ID", "EMAIL"])
 
 # Returns True if name contains any filter in filters
@@ -35,25 +36,23 @@ def get_SEGMENT_table_entries_with_all_key_columns() -> Set[str]:
     # skip table_names that contain any of the following phrases 
     table_name_filters = set(["DEV","STAGING"])
     
-    warehouse = WAREHOUSE
-    database = DATABASE
-    schema = 'INFORMATION_SCHEMA'
     batch_size = 10
     try:
         conn = connector.connect(
             user=USER_NAME,
             password=USER_PSWD,
             account=ACCOUNT,
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
+            warehouse=WAREHOUSE,
+            database=DATABASE,
+            schema=SCHEMA,
             protocol='https',
             port=PORT)
         
-        print(f"new connection: {warehouse} {database} {schema}")
+        print(f"new connection: {WAREHOUSE} {DATABASE} {SCHEMA}")
 
         cur = conn.cursor()
-        cur.execute("SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, DATA_TYPE from COLUMNS")
+        query = "SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, DATA_TYPE FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS"
+        cur.execute(query, timeout=timeout)
         
         num_batches = 0
         total_rows = 0
@@ -126,10 +125,10 @@ def get_table_entry_query_string(table_entry):
     for key in key_columns:
         parts.append(key)
     concats = ",'|',".join(parts)
-    select_clause = f"distinct(concat({concats}))"
+    select_clause = f"count(distinct(concat({concats})))"
     table_path = table_entry.replace('__','.')
     key_columns_where_clause = " and ".join([f"{x} is not NULL" for x in key_columns])
-    query_str = f"select {select_clause} from {table_path} where {key_columns_where_clause}"
+    query_str = f"SELECT {select_clause} FROM {table_path} WHERE {key_columns_where_clause}"
     return query_str
 
 
@@ -165,54 +164,33 @@ def get_SEGMENT_table_entries_key_column_counts(table_entries_with_all_key_colum
     for key in list(all_key_columns_set):
         parts.append( f"{key} is not NULL" )
     key_columns_where_clause = " and ".join(parts)
-
-    warehouse = WAREHOUSE
-    prev_database = None
-    prev_schema = None
-    conn = None
-    cur = None
     
     batch_size = 10
-
+    
+    conn = connector.connect(
+        user=USER_NAME,
+        password=USER_PSWD,
+        account=ACCOUNT,
+        warehouse=WAREHOUSE,
+        database=DATABASE,
+        schema=SCHEMA,
+        protocol='https',
+        port=PORT)
+    cur = None
+    
     for table_entry in sorted_table_entries:
         
-        try:
-            parts = table_entry.split("__")
-            if len(parts) != 3:
-                print(f"skipping table_entry: {table_entry}")
-                continue
-            database, schema, table = parts
-            
-            if database != prev_database or schema != prev_schema:                    
-                if conn is not None:
-                    conn.close()
-                    conn = None
-
-            if conn is None:
-                if cur is not None:
-                    cur.close()
-                    cur = None
-
-                conn = connector.connect(
-                    user=USER_NAME,
-                    password=USER_PSWD,
-                    account=ACCOUNT,
-                    warehouse=WAREHOUSE,
-                    database=database,
-                    schema=schema,
-                    protocol='https',
-                    port=PORT)
-                
-                print(f"new connection: {warehouse} {database} {schema}")
-                
-                prev_database = database
-                prev_schema = schema
+        table_entry = table_entry.replace("__",".")
+        parts = table_entry.split(".")
         
-            if cur is None:
-                cur = conn.cursor()
-
-            query = f"SELECT {key_columns_select_clause} FROM {table} WHERE {key_columns_where_clause}"
-            cur.execute(query)
+        # set database and schema for entries that have only table, like 'ANGL_APP_OPN_TO_PIF'
+        if len(parts) == 1:
+            table_entry = 'LOOKER_SOURCE.PUBLIC.' + table_entry
+            
+        try:
+            query = f"SELECT {key_columns_select_clause} FROM {table_entry} WHERE {key_columns_where_clause}"
+            cur = conn.cursor()
+            cur.execute(query, timeout=timeout)
 
             num_batches = 0
             total_rows = 0
@@ -242,22 +220,23 @@ def get_SEGMENT_table_entries_key_column_counts(table_entries_with_all_key_colum
         except Exception as err:
             print(f"Error: {type(err)} {str(err)}")
         finally:
-            if cur is not None:
-                cur.close()
-            if conn is not None:
-                conn.close()
+            cur.close()
+    # end for table_entry
     
     # display query strings for all skipped table entries
     print("\nquery strings for", len(uncounted_table_entries), "skipped tables out of", len(sorted_table_entries) )
     for table_entry in sorted(uncounted_table_entries):
         query_string = get_table_entry_query_string(table_entry)
-        print(query_string)
+        print(query_string + ';')
 
     print("\npassed", len(counted_table_entries), "tables out of", len(sorted_table_entries) )
     for counted_table_entry in sorted(counted_table_entries):
         print("passed", counted_table_entry)
 
     assert len(table_entries_key_column_counts) == len(counted_table_entries), "ERROR: count failure"
+    
+    conn.close()
+    
     return table_entries_key_column_counts
 
 
@@ -278,12 +257,12 @@ def get_SEGMENT_key_column_values(table_entries_key_column_counts):
 
 def test_get_table_entry_query_string():
     table_entry = 'ANGL_APP_OPN_TO_PIF_GNRL'
-    expected = "select distinct(concat('ANGL_APP_OPN_TO_PIF_GNRL','|','ANONYMOUS_ID','|','EMAIL','|','USER_ID')) from ANGL_APP_OPN_TO_PIF_GNRL where ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL"
+    expected = "SELECT distinct(concat('ANGL_APP_OPN_TO_PIF_GNRL','|','ANONYMOUS_ID','|','EMAIL','|','USER_ID')) FROM ANGL_APP_OPN_TO_PIF_GNRL WHERE ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL"
     result = get_table_entry_query_string(table_entry)
     assert result == expected, f"ERROR: expected:\n{expected}\nnot result:\n{result}"
     
     table_entry = 'SEGMENT__ANGEL_MOBILE_ANDROID_PROD__USER_SIGN_IN_STARTED'
-    expected = "select distinct(concat('SEGMENT__ANGEL_MOBILE_ANDROID_PROD__USER_SIGN_IN_STARTED','|','ANONYMOUS_ID','|','EMAIL','|','USER_ID')) from SEGMENT.ANGEL_MOBILE_ANDROID_PROD.USER_SIGN_IN_STARTED where ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL"
+    expected = "SELECT distinct(concat('SEGMENT__ANGEL_MOBILE_ANDROID_PROD__USER_SIGN_IN_STARTED','|','ANONYMOUS_ID','|','EMAIL','|','USER_ID')) FROM SEGMENT.ANGEL_MOBILE_ANDROID_PROD.USER_SIGN_IN_STARTED WHERE ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL"
     result = get_table_entry_query_string(table_entry)
     assert result == expected, f"ERROR: expected:\n{expected} not result:\n{result}"
 
