@@ -16,10 +16,12 @@ def matches_any(name, filters) -> bool:
             return True
     return False
 
-# Returns a list of all filtered table_column_count that contain all key_columns
+# Returns a list of all filtered SEGMENT table names that contain all key_columns
 @timefunc
-def find_tables_with_key_columns() -> Set[str]:
-    
+def get_SEGMENT_table_entries_with_all_key_columns() -> Set[str]:
+    # set of all filtered table names that contain all key_columns
+    table_entries_with_all_key_columns = set()
+
     # the number of column names found in a given table
     table_column_count = {}
     
@@ -95,17 +97,14 @@ def find_tables_with_key_columns() -> Set[str]:
         for key in all_key_columns_set:
             print(f"{key}: {column_name_counts.get(key)}")
         
-        # set of all filtered table names that contain all key_columns
-        tables_with_all_key_columns = set()
-
         print(f"\n{len(table_key_columns_sets.keys())} tables with any key_columns:", all_key_columns_set)
         for table_name, table_key_columns_set in table_key_columns_sets.items():
             if table_key_columns_set == all_key_columns_set:
-                assert table_name not in tables_with_all_key_columns, f"ERROR: {table_name} already saved"
-                tables_with_all_key_columns.add(table_name)
+                assert table_name not in table_entries_with_all_key_columns, f"ERROR: {table_name} already saved"
+                table_entries_with_all_key_columns.add(table_name)
                 print(table_name)
         
-        return tables_with_all_key_columns
+        return table_entries_with_all_key_columns
         
     except Exception as err:
         print(f"Error: {type(err)} {str(err)}")
@@ -121,7 +120,20 @@ def parse_key_column_counts(result_row_parts: List[str]) -> Dict[str,str]:
     assert len(key_column_names) == len(key_column_counts), "ERROR: in lengths of keys and values"
     return dict(zip(key_column_names, key_column_counts))
 
-# Return list of utc timestamped key_column_counts dicts for each table_entry. for example:
+def get_table_entry_query_string(table_entry):
+    key_columns = sorted(list(all_key_columns_set))
+    parts = ["'" + table_entry + "'"]
+    for key in key_columns:
+        parts.append(key)
+    concats = ",'|',".join(parts)
+    select_clause = f"distinct(concat({concats}))"
+    table_path = table_entry.replace('__','.')
+    key_columns_where_clause = " and ".join([f"{x} is not NULL" for x in key_columns])
+    query_str = f"select {select_clause} from {table_path} where {key_columns_where_clause}"
+    return query_str
+
+
+# Return list of utc timestamped key_column_counts for all SEGMENT_table_entries. for example:
 #
 # table_entries_key_column_counts = [ 
 #  { 
@@ -136,11 +148,11 @@ def parse_key_column_counts(result_row_parts: List[str]) -> Dict[str,str]:
 # ...
 # ]
 @timefunc
-def get_table_entries_key_column_counts(tables_with_all_key_columns: Set[str]) -> List[Dict]:
+def get_SEGMENT_table_entries_key_column_counts(table_entries_with_all_key_columns: Set[str]) -> List[Dict]:
     table_entries_key_column_counts = []
     
     job_datetime_str = datetime.datetime.utcnow().isoformat();
-    sorted_table_entries = sorted(list(tables_with_all_key_columns))
+    sorted_table_entries = sorted(list(table_entries_with_all_key_columns))
     uncounted_table_entries = set(sorted_table_entries)
     counted_table_entries = set()
     
@@ -234,10 +246,12 @@ def get_table_entries_key_column_counts(tables_with_all_key_columns: Set[str]) -
                 cur.close()
             if conn is not None:
                 conn.close()
-
-    print("\nskipped", len(uncounted_table_entries), "tables out of", len(sorted_table_entries) )
-    for uncounted_table_entry in sorted(uncounted_table_entries):
-        print("skipped", uncounted_table_entry)
+    
+    # display query strings for all skipped table entries
+    print("\nquery strings for", len(uncounted_table_entries), "skipped tables out of", len(sorted_table_entries) )
+    for table_entry in sorted(uncounted_table_entries):
+        query_string = get_table_entry_query_string(table_entry)
+        print(query_string)
 
     print("\npassed", len(counted_table_entries), "tables out of", len(sorted_table_entries) )
     for counted_table_entry in sorted(counted_table_entries):
@@ -247,12 +261,47 @@ def get_table_entries_key_column_counts(tables_with_all_key_columns: Set[str]) -
     return table_entries_key_column_counts
 
 
-def main():
-    tables_with_all_key_columns = find_tables_with_key_columns()
-    print("\nnum tables_with_all_key_columns:", len(tables_with_all_key_columns))
+# create a timestamped list of all unique collections of key_column values from a given table_entry. For example:
+# table_entry_key_column_values = [
+#   {
+#     'datetime': '2022-07-07T22:11:39.989134', 
+#     'table_entry': 'SEGMENT__THE_CHOSEN_MOBILE_IOS_PROD__IDENTIFIES', 
+#     'ANONYMOUS_ID': '60238a52-69d7-4ca2-8659-506c8214bdce', 
+#     'USER_ID': 'ac1af734-d5fb-49b1-b649-cfa640b3ba27',
+#     'EMAIL': 'howdy@doodie.com'
+#   },
+#   ...
+# ]
+def get_SEGMENT_key_column_values(table_entries_key_column_counts):
+    key_column_values = []
+    return key_column_values
+
+def test_get_table_entry_query_string():
+    table_entry = 'ANGL_APP_OPN_TO_PIF_GNRL'
+    expected = "select distinct(concat('ANGL_APP_OPN_TO_PIF_GNRL','|','ANONYMOUS_ID','|','EMAIL','|','USER_ID')) from ANGL_APP_OPN_TO_PIF_GNRL where ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL"
+    result = get_table_entry_query_string(table_entry)
+    assert result == expected, f"ERROR: expected:\n{expected}\nnot result:\n{result}"
     
-    table_entries_key_column_counts = get_table_entries_key_column_counts(tables_with_all_key_columns)
-    print("\nnum table_entries_key_column_counts:", len(table_entries_key_column_counts))
+    table_entry = 'SEGMENT__ANGEL_MOBILE_ANDROID_PROD__USER_SIGN_IN_STARTED'
+    expected = "select distinct(concat('SEGMENT__ANGEL_MOBILE_ANDROID_PROD__USER_SIGN_IN_STARTED','|','ANONYMOUS_ID','|','EMAIL','|','USER_ID')) from SEGMENT.ANGEL_MOBILE_ANDROID_PROD.USER_SIGN_IN_STARTED where ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL"
+    result = get_table_entry_query_string(table_entry)
+    assert result == expected, f"ERROR: expected:\n{expected} not result:\n{result}"
+
+    print("passed")
+
+    
+
+def main():
+    # test_get_table_entry_query_string()
+    
+    table_entries_with_all_key_columns = get_SEGMENT_table_entries_with_all_key_columns()
+    print("\nnum SEGMENT table_entries_with_all_key_columns:", len(table_entries_with_all_key_columns))
+    
+    table_entries_key_column_counts = get_SEGMENT_table_entries_key_column_counts(table_entries_with_all_key_columns)
+    print("\nnum SEGMENT table_entries_key_column_counts:", len(table_entries_key_column_counts))
+
+    key_column_values = get_SEGMENT_key_column_values(table_entries_key_column_counts)
+    print("\nnum SEGMENT key_column_values:", len(key_column_values))
 
 if __name__ == "__main__":
     
