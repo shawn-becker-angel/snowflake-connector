@@ -20,30 +20,37 @@ from ellis_island_users import get_ellis_island_users
 # Returns new augmented_segment_users_df with columns ['USER_ID', 'EMAIL', 'UUID'] by
 # doing a left outer join with ellis_island_users_df.
 # NOTE that the new 'UUID' column may be None
-def compute_augmented_segment_users_df(segment_table: str, ellis_island_users_df: pd.DataFrame):
+def compute_augmented_segment_users_df(segment_table: str, users_table: str, users_df: pd.DataFrame):
     segment_select_clause = ",".join(ALL_KEY_COLUMNS_LIST)
     segment_where_clause = " and ".join([f"{x} is not NULL" for x in ALL_KEY_COLUMNS_LIST])
-    segment_table_query = f"SELECT {segment_select_clause} from {segment_table} WHERE {segment_where_clause}"
+    segment_table_query = f"SELECT '{segment_table.upper}', {segment_select_clause} from {segment_table} WHERE {segment_where_clause}"
     
-    users_df = ellis_island_users_df
     users_df.rename(columns = {'UUID':'USER_UUID', 'EMAIL':'USER_EMAIL', 'USERNAME':'USER_USERNAME'}, inplace = True)
 
-    augmented_df = None
+    # the SEGMENT_TABLE used as left side of the left outer join, 
+    # the USER_ID, EMAIL and ANONYMOUS_ID from that segment_table, 
+    # the USER_TABLE used as right side of the left outer join,
+    # the USER_UUID of the USER_TABLE
+    augmented_df_columns = ['SEGMENT_TABLE', *ALL_KEY_COLUMNS_LIST, 'USER_TABLE', 'USER_UUID']
+    augmented_df = pd.DataFrame(columns=augmented_df_columns)
     segment_batch_iterator = query_batch_generator(segment_table_query)
     while True:
         try:
             segment_rows = next(segment_batch_iterator)
             segment_df = pd.DataFrame(data=segment_rows, columns=ALL_KEY_COLUMNS_LIST)
+            segment_df['SEGMENT_TABLE'] = segment_table.upper()
+            segment_df['USER_TABLE'] = users_table.upper()
             
             user_uuid_joined_df = pd.merge(left=segment_df, right=users_df, how="left", left_on='USER_ID', right_on='USER_UUID')
-            user_email_joined_df = pd.merge(left=segment_df, right=users_df, how="left", left_on='EMAIL', right_on='USER_EMAIL')
-            user_username_joined_df = pd.merge(left=segment_df, right=users_df, how="left", left_on='EMAIL', right_on='USER_USERNAME')
             
-            union_df = pd.union([user_uuid_joined_df, user_email_joined_df, user_username_joined_df])
+            # user_email_joined_df = pd.merge(left=segment_df, right=users_df, how="left", left_on='EMAIL', right_on='USER_EMAIL')
+            # user_username_joined_df = pd.merge(left=segment_df, right=users_df, how="left", left_on='EMAIL', right_on='USER_USERNAME')
             
-            assert len(union_df) == len(segment_df), "ERROR: df length failure"
+            # union_df = pd.union([user_uuid_joined_df, user_email_joined_df, user_username_joined_df])
             
-            augmented_df = union_df if is_empty_df(augmented_df) else pd.union([augmented_df, union_df])
+            assert len(user_uuid_joined_df) == len(segment_df), "ERROR: df length failure"
+            
+            augmented_df = pd.concat([augmented_df, user_uuid_joined_df], axis=0)
 
         except StopIteration:
             break
@@ -58,13 +65,13 @@ def get_augmented_segment_users(segment_tables: List[str]):
         print("num segment_tables:", len(segment_tables))
 
         print("get_ellis_island_users")
-        (users_csv_file, users_df) = get_ellis_island_users()
+        (users_table, users_csv_file, users_df) = get_ellis_island_users()
         if not is_empty_df(users_df):
             print("num ellis_island_users:", len(users_df), "in:", users_csv_file)
             
             for segment_table in segment_tables:
                 print("compute_augmented_segment_users_df")
-                augmented_segment_users_df = compute_augmented_segment_users_df(segment_table, users_df)
+                augmented_segment_users_df = compute_augmented_segment_users_df(segment_table, users_table, users_df)
                 if not is_empty_df(augmented_segment_users_df):
                     num_null_UUID_rows = sum([True for idx,row in augmented_segment_users_df.iterrows() if row['UUID'].isnull()])
                     num_valid_UUID_rows = sum([True for idx,row in augmented_segment_users_df.iterrows() if ~row['UUID'].isnull()])
