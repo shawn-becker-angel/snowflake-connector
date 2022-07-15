@@ -748,3 +748,117 @@ wt.user_id is not null and pu.id is not NULL and
 ei1.uuid is NULL
 ) select * from w limit 4;
 -- 76216
+
+
+
+Total wt
+62477637
+
+percent of wt with non-null USER_ID
+10677848 / 62477637 = 17.1 %
+
+percent of wt with null user_id
+51799789 / 62477637 = 82.9%
+
+percent of non-null wt USER_ID without matching pu.ID ID
+5429963 / 10677848 = 50.9%
+
+percent of non-null wt USER_ID with matching pu ID
+5247885 / 10677848 = 49.1 %
+
+——
+
+Total pu
+6339826
+
+Percent of pu with non-null ID
+6339826 / 6_339_826 = 100%
+
+Percent of non-null pu.ID with matching wt.USER_ID
+5248987 / 6339826 = 82.8%
+
+Percent of non-null pu.ID without matching wt.USER_ID
+5713995 / 6339826
+
+
+
+SET total_non_null_pu_ID = (    
+select count(distinct(pu.ID)) from
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    where pu.ID is not NULL);
+    
+SET non_null_pu_ID_with_matching_wt_USER_ID =  
+(select count(distinct(pu.ID)) from 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    left join 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on pu.ID = wt.USER_ID
+    where pu.ID is not NULL and  wt.USER_ID is not NULL);
+    
+SET non_null_pu_ID_without_matching_wt_USER_ID =     
+(select count(distinct(pu.ID)) from 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    left join 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on pu.ID = wt.USER_ID
+    where pu.ID is not NULL and  wt.USER_ID is NULL);
+    
+SET percent_non_null_pu_ID_with_matching_wt_USERID =
+(select 
+    100 * $non_null_pu_ID_with_matching_wt_USER_ID / $total_non_null_pu_ID);
+
+SET percent_non_null_pu_ID_without_matching_wt_USERID =
+(select
+    100 * $non_null_pu_ID_without_matching_wt_USER_ID / $total_non_null_pu_ID);
+
+select 
+    $percent_non_null_pu_ID_with_matching_wt_USERID,
+    $percent_non_null_pu_ID_without_matching_wt_USERID;
+    
+-- 9.887225
+-- 90.112775
+
+
+SET total_non_null_wt_USER_ID = 
+(select count(distinct(wt.USER_ID))
+from "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.USER_ID is not NULL);
+-- 1778593
+
+SET non_null_wt_USER_ID_with_matching_pu_ID = 
+(select count(distinct(wt.USER_ID)) from 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    left join 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on wt.USER_ID = pu.ID
+    where wt.USER_ID is not NULL and pu.ID is not NULL);
+-- 627130
+
+SET non_null_wt_USER_ID_without_matching_pu_ID = 
+(select count(distinct(wt.USER_ID)) from 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    left join 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on wt.USER_ID = pu.ID
+    where wt.USER_ID is not NULL and pu.ID is NULL);
+-- 1151463
+    
+select 
+    $non_null_wt_USER_ID_with_matching_pu_ID + 
+    $non_null_wt_USER_ID_without_matching_pu_ID -
+    $total_non_null_wt_USER_ID;
+
+SET percent_non_null_wt_USER_ID_with_matching_pu_ID =
+(select 
+    100 * $non_null_wt_USER_ID_with_matching_pu_ID / $total_non_null_wt_USER_ID);
+
+SET percent_non_null_wt_USER_ID_without_matching_pu_ID =
+(select 
+    100 * $non_null_wt_USER_ID_without_matching_pu_ID / $total_non_null_wt_USER_ID);
+
+select 
+    $percent_non_null_wt_USER_ID_with_matching_pu_ID,
+    $percent_non_null_wt_USER_ID_without_matching_pu_ID;
+-- 35.259894
+-- 64.740106
+
