@@ -1,0 +1,44 @@
+I am covid free! (for now)
+
+How’s this as a continuation of this mornings work?
+
+OBJECTIVE
+find ei.UUID for every record in id
+
+where
+id =  “SEGMENT”.“<SEGMENT_SCHEMA>“.”IDENTIFIES” 
+ei: = STITCH_LANDING.ELLIS_ISLAND.USER
+pu =  “SEGMENT”.“PERSONAS_THE_CHOSEN_WEB”.“USERS”
+wt =  “STITCH_LANDING”.“CHOSENHYDRA”.“WATCHTIME”
+and 
+ <SEGMENT_SCHEMA> is any schema 
+under the SEGMENT database 
+that has an IDENTIFIES table
+with non-null, USER_ID, RID, and EMAIL values
+
+Three-phase attempt:
+
+use id.USER_ID
+id.UUID = id.USER_ID  % ei UUID
+
+ 2. use id.RID:
+id.UUID = id.RID % wt.RID | wt.USER_ID % pu.ID -> ei.UUID
+
+ 3. use id.EMAIL:
+id.UUID = id.EMAIL %  ei.USERNAME | ei.UUID
+
+Where
+xx.C | xx.D indicates that non-null column C in table xx has non-null column D in the same table
+xx.A % yy.B indicates some percentage of non-null column A in table xx having a match with non-null column B in table yy
+
+A version of phase 1 has been running for a few hours 
+where id is all tables (not just IDENTIFIES) under SEGMENT that have
+records with non-null ANONYMOUS_ID, USER_ID, and EMAIL values
+
+breaking for dinner now.
+
+
+
+
+
+ 

@@ -21,9 +21,11 @@ from key_column_infos import get_key_column_infos
 @timefunc
 def main():
     
+    conn = create_connector()
+    
     # get (load or compute) the list of all queryable segment_tables with all key columns
     print("get_segment_tables")
-    (csv_file, segment_tables_df) = get_segment_tables(verbose=False)
+    (csv_file, segment_tables_df) = get_segment_tables(verbose=False, conn=conn)
     segment_tables = list(segment_tables_df['segment_table'])
     print("num segment_tables:", len(segment_tables_df), "in:", csv_file)
     
