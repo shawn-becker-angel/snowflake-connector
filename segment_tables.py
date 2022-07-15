@@ -14,7 +14,7 @@ from segment_utils import get_segment_table_from_info_schema_table_name
 
 
 # Returns the set of all queryable segment_tables that have all key_columns
-def compute_segment_tables(verbose: bool=True) -> Set[str]:
+def compute_segment_tables(conn: connector=None, verbose: bool=True) -> Set[str]:
     # set of all filtered segment_tables that contain all key_columns
     segment_tables = set()
     
@@ -35,7 +35,7 @@ def compute_segment_tables(verbose: bool=True) -> Set[str]:
     segment_table_filters = set(["DEV","STAGING"])
     
     query = "SELECT TABLE_NAME, COLUMN_NAME FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS"
-    query_batch_iterator = query_batch_generator(query, timeout_seconds=15)
+    query_batch_iterator = query_batch_generator(query, timeout_seconds=15, conn=conn)
 
     total_rows = 0
     while True:
@@ -110,7 +110,7 @@ def save_segment_tables(segment_tables: Set[str]) -> Tuple[str, pd.DataFrame]:
     segment_tables_df.to_csv(csv_file_path)
     return (csv_file_path, segment_tables_df)
 
-def get_segment_tables(verbose: bool=False) -> Tuple[str, pd.DataFrame]:
+def get_segment_tables(verbose: bool=False, conn: connector=None) -> Tuple[str, pd.DataFrame]:
     segment_tables_df = None
     csv_file_path = None
     if USE_LATEST_SEGMENT_TABLES_CSV_FILE:
@@ -122,7 +122,7 @@ def get_segment_tables(verbose: bool=False) -> Tuple[str, pd.DataFrame]:
     if is_empty_df(segment_tables_df):
         # compute and save
         print("compute segment_tables")
-        segment_tables = compute_segment_tables(verbose=verbose)
+        segment_tables = compute_segment_tables(verbose=verbose,conn=conn)
         
         print("save segment_tables")
         (csv_file_path, segment_tables_df) = save_segment_tables(segment_tables)

@@ -46,9 +46,11 @@ def test_constants():
     
     print("all tests passed")
 
-        
-def main():
+def tests():
     test_constants()
+
+def main():
+    tests()
 
 if __name__ == "__main__":
     main()
