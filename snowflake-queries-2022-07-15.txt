@@ -1,0 +1,864 @@
+--SCB SEGMENT anonymous_id-user_id
+
+-- ['PIF_DATE', 'APP_OPEN_DATE', 'COMPLETED_TIMESTAMP', 'STARTED_TIMESTAMP']
+
+select top 1 * FROM STITCH_LANDING.ELLIS_ISLAND.USER;
+
+--dawnackley5@gmail.com	da96c227-dc00-4dad-8bdd-93cd895d467d
+
+--2899359
+
+select data:email FROM STITCH_LANDING.ELLIS_ISLAND.SOCIAL_AUTH where user_id = 2899359;
+
+select u.uuid, u.username, a.data:email 
+FROM STITCH_LANDING.ELLIS_ISLAND.USER u 
+join STITCH_LANDING.ELLIS_ISLAND.SOCIAL_AUTH a 
+on a.user_id = u.id limit 4;
+--  
+
+with L as (
+    SELECT ANONYMOUS_ID, USER_ID, EMAIL from SEGMENT.THE_CHOSEN_MOBILE_ANDROID_PROD.IDENTIFIES 
+where USER_ID is not NULL and EMAIL is not NULL and ANONYMOUS_ID is not NULL
+) select count(*) from L;
+-- 1889075
+
+with segment_users as (
+SELECT distinct(CONCAT(ANONYMOUS_ID,'|',USER_ID,'|',EMAIL)) from SEGMENT.THE_CHOSEN_MOBILE_ANDROID_PROD.IDENTIFIES 
+where USER_ID is not NULL and EMAIL is not NULL and ANONYMOUS_ID is not NULL
+) select count(*) from segment_users;
+-- 243,978
+
+with segment_users as (
+SELECT ANONYMOUS_ID,USER_ID,EMAIL from SEGMENT.THE_CHOSEN_MOBILE_ANDROID_PROD.IDENTIFIES 
+where USER_ID is not NULL and EMAIL is not NULL and ANONYMOUS_ID is not NULL
+) select count(*) from segment_users;
+-- 1854930
+
+SELECT ANONYMOUS_ID,EMAIL,USER_ID from SEGMENT.ANGEL_APP_IOS.IDENTIFIES WHERE ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL;
+
+
+with W as (
+with L as (
+    select  user_id, email 
+       from SEGMENT.THE_CHOSEN_APP_WEB_PROD.IDENTIFIES 
+       where user_id is not NULL and email is not NULL
+)
+select U.uuid, U.username from L left outer join
+STITCH_LANDING.ELLIS_ISLAND.USER U 
+on L.user_id = U.uuid and L.email = U.username
+) select count(*) from W;
+-- 51679
+
+with L as (
+    select  user_id, email 
+       from SEGMENT.THE_CHOSEN_APP_WEB_PROD.IDENTIFIES 
+       where user_id is not NULL and email is not NULL
+)
+select count(*) from L;
+-- 51675
+
+
+
+-- SEGMENT.THE_CHOSEN_APP_WEB_PROD.IDENTIFIES and 
+-- STITCH_LANDING.ELLIS_ISLAND.USER
+-- vetted ids with non-matching email
+with W as (
+    with L as (
+    select  user_id, email 
+       from SEGMENT.THE_CHOSEN_APP_WEB_PROD.IDENTIFIES 
+       where user_id is not NULL and email is not NULL
+    )
+    select L.user_id, L.email, U.uuid, U.username from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.user_id = U.uuid
+) select count(*) from W where email != username;
+--98
+
+-- vetted emails with non-matching ids
+with W as (
+    with L as (
+    select  user_id, email 
+       from SEGMENT.THE_CHOSEN_APP_WEB_PROD.IDENTIFIES 
+       where user_id is not NULL and email is not NULL
+    )
+    select L.user_id, L.email, U.uuid, U.username from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.email = U.username
+) select count(*) from W where user_id != uuid;
+-- 0
+
+-- SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS and 
+-- STITCH_LANDING.ELLIS_ISLAND.USER
+-- vetted ids with non-matching email
+with W as (
+    with L as (
+    select  id, email 
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS 
+       where id is not NULL and email is not NULL
+    )
+    select L.id, L.email, U.uuid, U.username from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.id = U.uuid
+) select count(*) from W where email != username;
+-- 2420
+
+-- vetted emails with non-matching ids
+with W as (
+    with L as (
+    select  id, email 
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS  
+       where id is not NULL and email is not NULL
+    )
+    select L.id, L.email, U.uuid, U.username from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.email = U.username
+) select count(*) from W where id != uuid;
+-- 3937
+
+-- SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS L
+-- STITCH_LANDING.ELLIS_ISLAND.USER U
+-- number of LIDS that have no matching UID
+
+with L as (
+select  id as LID
+   from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+   where id is not NULL
+)
+select count(distinct(LID)) from L;
+-- 6333564
+
+-- number of non-vetted WEB USERS id
+with W as (
+    with L as (
+    select  id as LID
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+       where id is not NULL
+    )
+    select L.LID, U.UUID as UUID from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.LID = UUID
+) select count(*) from W where UUID is NULL;
+-- 5387618
+
+-- number of vetted WEB USERS id
+with W as (
+    with L as (
+    select  id as LID
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+       where id is not NULL
+    )
+    select L.LID, U.UUID as UUID from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.LID = UUID
+) select count(*) from W where UUID is not NULL;
+-- 945946
+
+-- number of WEB_USERS with non-null ids
+    select  count(*) 
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+       where id is not NULL
+-- 6333564
+    
+    select (6333564 - 945946) = 5387618
+    -- TRUE
+
+
+-- 
+
+
+
+
+-- SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+-- SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+-- number of matching email that have different ids
+with W as (
+    with L as (
+    select  id, email 
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS
+       where id is not NULL and email is not NULL
+    )
+    select L.id as LID, L.email, U.id as UID, U.email
+    from L left outer join
+    SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS U 
+    on L.email = U.email
+) select count(*) from W where LID != UID;
+-- 7124
+
+
+
+-- count of total vetted ids - count of distinct vetted id
+with W as (
+    with L as (
+    select  id, email 
+       from SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS 
+       where id is not NULL and email is not NULL
+    )
+    select L.id, U.uuid from L left outer join
+    STITCH_LANDING.ELLIS_ISLAND.USER U 
+    on L.id = U.uuid
+) select count(W.id) - count(distinct(W.id)) from W where W.id is not NULL;
+-- 731225  NOT WORKING
+
+with M as (
+    select W.id as WID, U.id as UID
+    from SEGMENT.THE_CHOSEN_MOBILE_IOS_PROD.USERS W, 
+    SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS U
+) select count(*) from M where WID = UID;
+-- 1238613
+
+set PERSONA_USERS='SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS';
+SET ELLIS_ISLAND_USERS='STITCH_LANDING.ELLIS_ISLAND.USER';
+
+with M as (
+    select W.id as WID, U.id as UID
+    from SEGMENT.THE_CHOSEN_MOBILE_IOS_PROD.USERS W, 
+    IDENTIFIER($PERSONA_USERS) U
+) select count(*) from M where WID = UID;
+
+
+select count(distinct(identifies.user_id))
+from 
+"SEGMENT"."THE_CHOSEN_APP_REACT_NATIVE_PROD"."IDENTIFIES" identifies;
+-- 3544111
+
+select count(distinct(eiu.uuid))
+from
+STITCH_LANDING.ELLIS_ISLAND.USER eiu
+-- 2934615
+
+select count(distinct(persona_user.id))
+from
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" persona_user 
+-- 6338175
+
+
+--join "SEGMENT"."THE_CHOSEN_APP_REACT_NATIVE_PROD"."IDENTIFIES" identifies on persona_user.id = identifies.user_id
+
+select 
+from 
+"SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" identifies
+left join 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+on wt.rid = identifies.rid
+where 
+
+
+join
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" persona_user  
+left outer join n identifies.user_id = persona_user.id
+where persona_user.id is NULL
+
+
+
+====================================================
+
+
+-- intersection between wt.USER_ID and ei.UUID
+select count(*) from 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt,
+"STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+where wt.USER_ID = ei.UUID
+and wt.USER_ID is not NULL and ei.UUID is not NULL;
+-- 10_062_986
+
+====================================================
+-- number of wt with non-null RID
+select count(distinct(wt.ID)) from
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.RID is not NULL;
+-- 62467220
+
+select count(distinct(wt.ID)) from
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.RID is NULL;
+-- 13705
+
+select count(distinct(wt.ID)) from
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+-- 62480925
+
+-----------------------------------------------------
+-- number of id with non-null RID
+select count(distinct(id.ID)) from
+"SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id
+where id.RID is not NULL;
+-- 8537300
+
+-----------------------------------------------------
+
+select count(distinct(id.RID)) from
+"SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id
+left outer join
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+on id.RID = wt.RID
+where id.RID is not NULL and wt.RID is NULL;
+-- 537745
+
+% of id.RID with/without matching wt.RID
+-- with
+select 100 * 1755570 / (1755570+537745) = 76.6%
+-- without
+select 100 * 537745 / (1755570+537745) = 23/4 %
+
+
+
+
+-- % of wt RID with with matching id RID
+select 100 * 71233761 / 62467220 = 114.0%
+
+-- % of id RID with matching wt RID
+select 100 * 71233761 / 8537300 = 834.4 %
+
+====================================================
+-- number of wt with non-null USER_ID
+select count(*) from 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.USER_ID is not NULL;
+-- 10678251
+-----------------------------------------------------
+-- number of pu with no-null ID
+select count(*) from
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+where pu.ID is not NULL;
+-- 6340134
+---------------------------------------------------
+-- intersection between wt.USER_ID and persona users.ID
+select count(*) from
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt,
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+where wt.user_id = pu.id
+and wt.user_id is not NULL and pu.ID is not NULL;
+-- 5_247_885
+
+% of wt with matching pu
+select 100 * 5247885 / 10678251 = 49.15%
+
+% of pu with matching wt
+select 100 * 5247885 / 6340134 = 82.8%
+
+====================================================
+-- wt sizes with/without USER_ID
+select count(distinct(ID)) from
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.USER_ID is not NULL;
+-- 62_477_637 all watchtimes
+-- 10_677_848 with non-null USER_ID 
+
+-- percent of wt with non-null USER_ID
+select 100 * 10677848 / 62477637 = 17.1 %
+
+
+select count(distinct(ID)) from
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.USER_ID is NULL;
+-- 51_799_789 with null USER_ID
+
+-- percent of wt with null user_id
+select 100 * 51799789 / 62477637 = 82.9%
+
+====================================================
+-- persona users size with/without ID
+
+drop table data.public.scb_temp;
+
+
+
+SET total_non_null_pu_ID = (    
+select count(distinct(pu.ID)) from
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    where pu.ID is not NULL);
+    
+SET non_null_pu_ID_with_matching_wt_USER_ID =  
+(select count(distinct(pu.ID)) from 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    left join 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on pu.ID = wt.USER_ID
+    where pu.ID is not NULL and  wt.USER_ID is not NULL);
+    
+SET non_null_pu_ID_without_matching_wt_USER_ID =     
+(select count(distinct(pu.ID)) from 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    left join 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on pu.ID = wt.USER_ID
+    where pu.ID is not NULL and  wt.USER_ID is NULL);
+    
+SET percent_non_null_pu_ID_with_matching_wt_USERID =
+(select 
+    100 * $non_null_pu_ID_with_matching_wt_USER_ID / $total_non_null_pu_ID);
+
+SET percent_non_null_pu_ID_without_matching_wt_USERID =
+(select
+    100 * $non_null_pu_ID_without_matching_wt_USER_ID / $total_non_null_pu_ID);
+
+select 
+    $percent_non_null_pu_ID_with_matching_wt_USERID,
+    $percent_non_null_pu_ID_without_matching_wt_USERID;
+    
+-- 9.887225
+-- 90.112775
+
+=====================================
+SET total_non_null_wt_USER_ID = 
+(select count(distinct(wt.USER_ID))
+from "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.USER_ID is not NULL);
+-- 1778593
+
+SET non_null_wt_USER_ID_with_matching_pu_ID = 
+(select count(distinct(wt.USER_ID)) from 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    left join 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on wt.USER_ID = pu.ID
+    where wt.USER_ID is not NULL and pu.ID is not NULL);
+-- 627130
+
+SET non_null_wt_USER_ID_without_matching_pu_ID = 
+(select count(distinct(wt.USER_ID)) from 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    left join 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on wt.USER_ID = pu.ID
+    where wt.USER_ID is not NULL and pu.ID is NULL);
+-- 1151463
+    
+select 
+    $non_null_wt_USER_ID_with_matching_pu_ID + 
+    $non_null_wt_USER_ID_without_matching_pu_ID -
+    $total_non_null_wt_USER_ID;
+
+SET percent_non_null_wt_USER_ID_with_matching_pu_ID =
+(select 
+    100 * $non_null_wt_USER_ID_with_matching_pu_ID / $total_non_null_wt_USER_ID);
+
+SET percent_non_null_wt_USER_ID_without_matching_pu_ID =
+(select 
+    100 * $non_null_wt_USER_ID_without_matching_pu_ID / $total_non_null_wt_USER_ID);
+
+select 
+    $percent_non_null_wt_USER_ID_with_matching_pu_ID,
+    $percent_non_null_wt_USER_ID_without_matching_pu_ID;
+-- 35.259894
+-- 64.740106
+
+-------------------------------------------
+
+
+-- 6_339_826 (distinct) personas
+
+select count(distinct(ID)) from
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS"
+where ID is NULL;
+-- 0
+
+====================================================
+-- percent of persona_user ID with with/without matching watchtime USER_ID
+select count(pu.ID) from 
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+left join 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+on pu.ID = wt.USER_ID
+where pu.ID is not NULL and  wt.USER_ID is not NULL;
+-- 5248987
+select 100 * 5248987 / 6339826 = 82.8%
+
+select count(pu.ID) from 
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+left join 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+on pu.ID = wt.USER_ID
+where pu.ID is not NULL and  wt.USER_ID is NULL;
+-- 5_713_995
+-- 5_714_153
+
+select 100 * 5714153 / 6339826 = 90.1% 
+
+
+-- percent of watchtime USER_ID without matching personal_user ID
+select count(wt.USER_ID) from 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+left join 
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+on wt.USER_ID = pu.ID 
+where wt.USER_ID is not NULL and pu.ID is NULL;
+-- 5429963
+
+select 100 * 5429963 / 10677848 = 50.9%
+
+-- percent of watchtime USER_ID with matching personal_user ID
+select count(wt.USER_ID) from 
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+left join 
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+on wt.USER_ID = pu.ID 
+where wt.USER_ID is not NULL and pu.ID is not NULL;
+-- 5247885
+
+select 100 * 5247885 / 10677848 = 49.1 %
+
+======================================================================
+
+select distinct identifies.user_id as invalid_user_id, wt.user_id as valid_user_id
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" identifies identifies,
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+
+from "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" persona_user 
+
+
+select count(*) 
+from
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" persona
+left join
+"STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt on wt.rid = 
+.rid
+"STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+
+
+
+
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei on ei.uuid = persona_user.id
+join "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt on wt.rid = identifies.rid
+where ei.uuid is null and identifies.rid is not null and wt.user_id is not null
+
+
+where ei.uuid = persona.id and identifies.user_id = persona.id
+and wt.rid = identifies.rid and ei.uuid is null and identifies.rid is not null and wt.user_id is not null
+
+
+
+select u.uuid, u.username, u.inserted_at, u.updated_at, a.data:email  FROM STITCH_LANDING.ELLIS_ISLAND.USER u     join STITCH_LANDING.ELLIS_ISLAND.SOCIAL_AUTH a     on a.user_id = u.id limit 4;
+
+
+SELECT ANONYMOUS_ID,EMAIL,USER_ID from SEGMENT.ANGEL_MOBILE_IOS_PROD.IDENTIFIES WHERE ANONYMOUS_ID is not NULL and EMAIL is not NULL and USER_ID is not NULL limit 4;
+
+
+
+
+with w as (
+select distinct identifies.user_id as invalid_user_id, wt.user_id as valid_user_id
+from "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" persona_user 
+
+join "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" identifies on persona_user.id = identifies.user_id 
+
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei on ei.uuid = persona_user.id
+join "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt on wt.rid = identifies.rid
+where ei.uuid is null and identifies.rid is not null and wt.user_id is not null
+) select count(*) from w;
+-- 76214
+
+
+with w as (
+select distinct identifies.user_id as invalid_user_id, wt.user_id as valid_user_id
+from "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" persona_user 
+
+join SEGMENT.THE_CHOSEN_APP_REACT_NATIVE_PROD.IDENTIFIES identifies on persona_user.id = identifies.user_id 
+
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei on ei.uuid = persona_user.id
+join "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt on wt.rid = identifies.CONTEXT_CONNECT_RID
+where ei.uuid is null and identifies.CONTEXT_CONNECT_RID is not null and wt.user_id is not null
+) select count(*) from w;
+
+
+select count(*) from 
+--SEGMENT.THE_CHOSEN_APP_REACT_NATIVE_PROD.IDENTIFIES id,
+"SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu 
+where id.user_id = pu.id;
+
+3723262 intersection
+id.user_ids 3753167
+
+
+
+
+
+-----------------------------------------------
+-- id.UUID from id.USER_ID -LJ- ei.UUID (not null A)                        LJ:1, J:0 A
+-- id.UUID from id.EMAIL -LJ- e1.USERNAME | UUID (not null B)               LJ:1, J:0 B
+-- id.UUID from id.USER_ID -J- pu.ID -LJ - ei.UUID (not null C)             LJ:1, J:1 C
+-- id.UUID from id.RID -J- wt.RID | wt.USER_ID -LJ- ei.UUID (not null D)    LJ:1, J:1 D
+-----------------------------------------------
+
+id = all rows of any segment identifies table where user_id !NULL, email !NULL, rid !NULL
+ei = all rows of ellis island users where username !NULL, uuid !NULL
+pu = all rows of persona users where id !NULL
+wt = all rows of watchtime where rid !NULL, user_id !NULL
+
+1. find all segment tables where identifies in table_name and 
+count(column_name in key_columns) == 3
+
+
+select table_name, count(column_name)
+from LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS
+where table_name like '%IDENTIFIES'
+and COLUMN_NAME in ('USER_ID','EMAIL','RID')
+group by table_name
+having count(column_name) >= 2
+
+
+select count(*)
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+where id.user_id is not NULL and id.email is not NULL and id.rid is not NULL;
+set id_cnt = 1803310;
+
+select count(*)
+from "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+where ei.username is not NULL and ei.uuid is not NULL;
+set ei_cnt = 2936630
+
+select count(*)
+from "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+where pu.id is not NULL;
+set pu_cnt = 6343502
+
+select count(*)
+from "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.rid is not NULL and wt.user_id is not NULL;
+set wt_cnt = 10669033
+
+with A as (
+select distinct id.user_id, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on id.user_id = ei.UUID
+where 
+    id.user_id is not NULL 
+    and ei.UUID is not NULL
+) select count(*) from A;
+set A_cnt = 362631;
+
+with A2 as (
+select distinct id.user_id, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on id.user_id = ei.UUID
+) select count(*) from A2;
+-- same
+
+with B as (
+select distinct id.email, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on id.email = ei.username
+where 
+    id.email is not NULL and 
+    ei.username is not NULL and 
+    ei.uuid is not NULL
+) select count(*) from B;
+set B_cnt = 286761;
+
+with B2 as (
+select distinct id.email, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on id.email = ei.username
+where 
+    ei.uuid is not NULL
+) select count(*) from B2;
+-- same
+
+with C as (
+select distinct id.user_id, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+join "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on id.user_id = pu.id  
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on pu.id = ei.uuid
+where 
+    id.user_id is not NULL and 
+    pu.id is not NULL and 
+    ei.uuid is not NULL
+) select count(*) from C;
+set C_cnt = 308025;
+
+with C2 as (
+select distinct id.user_id, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+join "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on id.user_id = pu.id  
+join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on pu.id = ei.uuid
+where 
+    ei.uuid is not NULL
+) select count(*) from C2;
+-- same
+
+with D as (
+select distinct id.rid, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id
+join "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on id.rid = wt.rid
+left join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on wt.user_id = ei.uuid
+where 
+    id.rid is not NULL and 
+    wt.rid is not NULL and 
+    wt.user_id is not NULL and 
+    ei.uuid is not NULL
+) select count(*) from D;
+set D_cnt = 307593;
+
+with D2 as (
+select distinct id.rid, ei.uuid as valid_uuid
+from "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id
+join "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on id.rid = wt.rid
+join "STITCH_LANDING"."ELLIS_ISLAND"."USER" ei
+    on wt.user_id = ei.uuid
+where 
+    ei.uuid is not NULL
+) select count(*) from D2;
+-- same
+
+-- ID cvr percent
+set ID_cvr = (select $A_cnt + $B_cnt + $C_cnt + $D_cnt);
+select 100 * $ID_cvr / $ID_cnt;
+-- 70.149336
+
+-- ID not_cvr percent
+set ID_not_cvr = (select $ID_cnt - $ID_cvr);
+select 100 * $ID_not_cvr / $ID_cnt;
+-- 29.850664
+
+
+-----------------------------------------------
+ A 
+!A and  B 
+!A and !B and  C
+!A and !B and !C and  D
+----------------------
+
+-----------------------------------------------
+with w as (
+select distinct id.user_id as id_user_id, 
+ei2.uuid as valid_uuid
+from "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu 
+join "SEGMENT"."THE_CHOSEN_MOBILE_IOS_PROD"."IDENTIFIES" id 
+on id.user_id = pu.id 
+left join 
+"STITCH_LANDING"."ELLIS_ISLAND"."USER" ei1 
+on pu.id = ei1.uuid
+join "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt on id.rid = wt.rid 
+left join
+"STITCH_LANDING"."ELLIS_ISLAND"."USER" ei2
+on wt.user_id = ei2.uuid
+where ei2.uuid is not null and id.rid is not null and 
+wt.user_id is not null and pu.id is not NULL and 
+ei1.uuid is NULL
+) select * from w limit 4;
+-- 76216
+
+
+
+Total wt
+62477637
+
+percent of wt with non-null USER_ID
+10677848 / 62477637 = 17.1 %
+
+percent of wt with null user_id
+51799789 / 62477637 = 82.9%
+
+percent of non-null wt USER_ID without matching pu.ID ID
+5429963 / 10677848 = 50.9%
+
+percent of non-null wt USER_ID with matching pu ID
+5247885 / 10677848 = 49.1 %
+
+——
+
+Total pu
+6339826
+
+Percent of pu with non-null ID
+6339826 / 6_339_826 = 100%
+
+Percent of non-null pu.ID with matching wt.USER_ID
+5248987 / 6339826 = 82.8%
+
+Percent of non-null pu.ID without matching wt.USER_ID
+5713995 / 6339826
+
+
+
+SET total_non_null_pu_ID = (    
+select count(distinct(pu.ID)) from
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    where pu.ID is not NULL);
+    
+SET non_null_pu_ID_with_matching_wt_USER_ID =  
+(select count(distinct(pu.ID)) from 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    left join 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on pu.ID = wt.USER_ID
+    where pu.ID is not NULL and  wt.USER_ID is not NULL);
+    
+SET non_null_pu_ID_without_matching_wt_USER_ID =     
+(select count(distinct(pu.ID)) from 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    left join 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    on pu.ID = wt.USER_ID
+    where pu.ID is not NULL and  wt.USER_ID is NULL);
+    
+SET percent_non_null_pu_ID_with_matching_wt_USERID =
+(select 
+    100 * $non_null_pu_ID_with_matching_wt_USER_ID / $total_non_null_pu_ID);
+
+SET percent_non_null_pu_ID_without_matching_wt_USERID =
+(select
+    100 * $non_null_pu_ID_without_matching_wt_USER_ID / $total_non_null_pu_ID);
+
+select 
+    $percent_non_null_pu_ID_with_matching_wt_USERID,
+    $percent_non_null_pu_ID_without_matching_wt_USERID;
+    
+-- 9.887225
+-- 90.112775
+
+
+SET total_non_null_wt_USER_ID = 
+(select count(distinct(wt.USER_ID))
+from "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+where wt.USER_ID is not NULL);
+-- 1778593
+
+SET non_null_wt_USER_ID_with_matching_pu_ID = 
+(select count(distinct(wt.USER_ID)) from 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    left join 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on wt.USER_ID = pu.ID
+    where wt.USER_ID is not NULL and pu.ID is not NULL);
+-- 627130
+
+SET non_null_wt_USER_ID_without_matching_pu_ID = 
+(select count(distinct(wt.USER_ID)) from 
+    "STITCH_LANDING"."CHOSENHYDRA"."WATCHTIME" wt
+    left join 
+    "SEGMENT"."PERSONAS_THE_CHOSEN_WEB"."USERS" pu
+    on wt.USER_ID = pu.ID
+    where wt.USER_ID is not NULL and pu.ID is NULL);
+-- 1151463
+    
+select 
+    $non_null_wt_USER_ID_with_matching_pu_ID + 
+    $non_null_wt_USER_ID_without_matching_pu_ID -
+    $total_non_null_wt_USER_ID;
+
+SET percent_non_null_wt_USER_ID_with_matching_pu_ID =
+(select 
+    100 * $non_null_wt_USER_ID_with_matching_pu_ID / $total_non_null_wt_USER_ID);
+
+SET percent_non_null_wt_USER_ID_without_matching_pu_ID =
+(select 
+    100 * $non_null_wt_USER_ID_without_matching_pu_ID / $total_non_null_wt_USER_ID);
+
+select 
+    $percent_non_null_wt_USER_ID_with_matching_pu_ID,
+    $percent_non_null_wt_USER_ID_without_matching_pu_ID;
+-- 35.259894
+-- 64.740106
+

@@ -11,7 +11,6 @@ from query_generator import query_batch_generator, create_connector
 from utils import find_latest_file, is_readable_file
 from data_frame_utils import is_empty_data_frame, get_data_frame_len, load_latest_data_frame, save_data_frame
 
-
 # Returns a list of ellis_island_users, each of which is a 
 # dict with ELLIS_ISLAND_USER_COLUMNS attributes
 def compute_ellis_island_users_df(conn: connector=None) -> pd.DataFrame:
