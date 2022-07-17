@@ -3,7 +3,8 @@ import pandas as pd
 from constants import *   
 from typing import Set, List, Dict, Optional, Tuple
 from query_generator import query_batch_generator, create_connector
-from utils import is_empty_list, find_latest_file, is_empty_df, is_readable_file
+from utils import is_empty_list, find_latest_file, is_readable_file
+from data_frame_utils import is_empty_data_frame
 from functools import cache
 import datetime
 from timefunc import timefunc
@@ -15,8 +16,8 @@ from segment_utils import get_info_schema_table_name_from_segment_table
 # Returns the query template used by get_key_column_info_query_info()
 @cache
 def get_key_column_info_query_template():
-    select_clause = ",".join([f"count(distinct({x}))" for x in ALL_KEY_COLUMNS_LIST])
-    not_null_clause = " and ".join([f"{x} is not NULL" for x in ALL_KEY_COLUMNS_LIST])
+    select_clause = ",".join([f"count(distinct({x}))" for x in ALL_KEY_COLUMNS])
+    not_null_clause = " and ".join([f"{x} is not NULL" for x in ALL_KEY_COLUMNS])
     query_template = f"SELECT {select_clause} FROM <<segment_table>> WHERE {not_null_clause}"
     return query_template
 
@@ -72,7 +73,7 @@ def find_first_sorted_timestamp_column(segment_table: str, conn: connector=None)
 #     'USER_ID': 32
 #    }
 def parse_key_column_counts(result_row_parts: List[str]) -> Dict[str,str]:
-    key_column_names = list(ALL_KEY_COLUMNS_SET)
+    key_column_names = list(ALL_KEY_COLUMNS)
     key_column_counts = result_row_parts
     assert len(key_column_names) == len(key_column_counts), "ERROR: in lengths of keys and values"
     return dict(zip(key_column_names, key_column_counts))
@@ -202,7 +203,7 @@ def get_key_column_infos(segment_tables: Set[str], verbose: bool=True) -> Tuple[
         
         print("save key_column_infos")
         (key_column_infos_csv_path, df) = save_key_column_infos(key_column_infos)
-        if is_empty_df(df) is False:
+        if is_empty_data_frame(df) is False:
             key_column_infos_df = df
     
     return (key_column_infos_csv_path, key_column_infos_df)
