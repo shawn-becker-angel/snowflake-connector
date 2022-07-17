@@ -13,16 +13,20 @@ from data_frame_utils import is_empty_data_frame, get_data_frame_len, load_lates
 
 # Returns a list of ellis_island_users, each of which is a 
 # dict with ELLIS_ISLAND_USER_COLUMNS attributes
-def compute_ellis_island_users_df(conn: connector=None) -> pd.DataFrame:
+def compute_ellis_island_users_df(conn: connector=None, verbose: bool=True) -> pd.DataFrame:
     ellis_island_users = []
     dot_freq = 10000
     dot_char = '.'
+    
     query = \
-"""select u.uuid, u.username, u.inserted_at, u.updated_at, TO_VARCHAR(a.data:email) 
-    FROM STITCH_LANDING.ELLIS_ISLAND.USER u 
-    join STITCH_LANDING.ELLIS_ISLAND.SOCIAL_AUTH a 
-    on a.user_id = u.id
+"""select U.UUID AS USER_UUID, U.USERNAME AS USER_USERNAME, TO_VARCHAR(A.DATA:EMAIL) AS USER_EMAIL 
+    FROM STITCH_LANDING.ELLIS_ISLAND.USER U 
+    join STITCH_LANDING.ELLIS_ISLAND.SOCIAL_AUTH A 
+    ON A.USER_ID = U.ID
+    WHERE U.INSERTED_AT > '2021-04-01'
 """
+    if verbose:
+        print("query:", query)
     query_batch_iterator = query_batch_generator(query, conn=conn)
     num_users = 0
     while True:
@@ -40,36 +44,13 @@ def compute_ellis_island_users_df(conn: connector=None) -> pd.DataFrame:
                 num_users += 1
         except StopIteration:
             break
+    print()
     ellis_island_users_df = pd.DataFrame(data=ellis_island_users, columns=ELLIS_ISLAND_USERS_DF_COLUMNS)
     return ellis_island_users_df
 
-# Returns a ellis_island_users_df either loaded from the latest csv file
-# or a newly computed and saved ellis_island_users_df
-#  
-def get_ellis_island_users_df(conn: connector=None, load_latest: bool=True, verbose: bool=False) -> pd.DataFrame:
-    ellis_island_users_df = None
-    base_name = ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME
-    # attempt to load ellis_island_users_df from the most recent csv file
-    if load_latest:
-        result = load_latest_data_frame(base_name)
-        if result:
-            _, ellis_island_users_df = result
-    # compute and save a new ellis_island_users_df if needed
-    if not ellis_island_users_df:
-        ellis_island_users_df = compute_ellis_island_users_df(conn=conn)
-    return ellis_island_users_df
-
-# Returns the csv file and the DataFrame created 
-# from a list of ellis island user dicts
-def save_ellis_island_users(ellis_island_users: List[Dict]) -> Tuple[str, pd.DataFrame]:
-    users_df = pd.DataFrame(data=ellis_island_users, columns=ELLIS_ISLAND_USERS_DF_COLUMNS)
-    utc_now = datetime.datetime.utcnow().isoformat()
-    users_csv_file = f"/tmp/ellis_island_users-{utc_now}.csv"
-    users_df.to_csv(users_csv_file)
-    return (users_csv_file, users_df)
-
-# Returns an ellis_island_users csv file and DataFrame either by 
-# loading the latest csv file or by computing and saving a new one.
+# Returns an ellis_island_users_df either 
+# loaded from the latest csv file
+# or newly computed and saved to a new csv file
 def get_ellis_island_users_df(conn: connector=None, use_latest: bool=True, verbose: bool=True) -> Tuple[str, pd.DataFrame]:
     csv_file = None
     users_df = None
@@ -77,8 +58,8 @@ def get_ellis_island_users_df(conn: connector=None, use_latest: bool=True, verbo
         result = load_latest_data_frame(ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME)
         if result is not None:
             (csv_file, users_df) = result
-        if verbose:
-            print(f"loaded {get_data_frame_len(users_df)} ellis_island_users from {csv_file}")
+            if verbose:
+                print(f"loaded {get_data_frame_len(users_df):,} ellis_island_users from {csv_file}")
             
     if is_empty_data_frame(users_df):
         if verbose:
@@ -86,7 +67,7 @@ def get_ellis_island_users_df(conn: connector=None, use_latest: bool=True, verbo
         users_df = compute_ellis_island_users_df(conn=conn)
         csv_file = save_data_frame(ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME, users_df)
         if verbose:
-            print("saved {get_data_frame_len(users_df)} ellis_island_users to {csv_file}")
+            print(f"saved {get_data_frame_len(users_df):,} ellis_island_users to {csv_file}")
 
     return (csv_file, users_df)
 
@@ -96,7 +77,7 @@ def get_ellis_island_users_df(conn: connector=None, use_latest: bool=True, verbo
 
 def test_get_ellis_island_users_df():
     conn = create_connector()
-    (users_csv_file, users_df) = get_ellis_island_users_df(conn=conn)
+    (users_csv_file, users_df) = get_ellis_island_users_df(conn=conn, use_latest=False)
     assert len(users_df) > 0, f"ERROR: zero ellis_island_users"
 
 def tests():

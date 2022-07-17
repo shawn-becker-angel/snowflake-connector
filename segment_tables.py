@@ -66,8 +66,6 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=False) -> pd.D
         except StopIteration:
             break
     
-    assert SEGMENT_TABLES_DF_COLUMNS == 'segment_table-columns', "ERROR: SEGMENT_TABLES_DF_COLUMNS failure"
-
     # create the list of segment_table_dict filtered according to their column_sets
     segment_tables = list()
     for segment_table, columns_set in segment_table_column_sets.items():
@@ -102,12 +100,14 @@ def get_segment_tables_df(conn: connector=None, load_latest: bool=True, verbose:
     if load_latest:
         result = load_latest_data_frame(base_name)
         if result:
-            _, segment_tables_df = result
+            csv_file, segment_tables_df = result
+
     # compute and save a new segment_tables_df if needed
     if not segment_tables_df:
         segment_tables_df = compute_segment_tables_df(conn=conn)
-    return segment_tables_df
+        csv_file = save_data_frame(base_name, segment_tables_df)
 
+    return (csv_file, segment_tables_df)
 
 # Queries snowflake to return a list of column names for the given segment_table
 def find_segment_table_columns(segment_table: str, conn: connector=None, verbose: bool=False) -> List[str]:
