@@ -13,7 +13,7 @@ from snowflake.connector import ProgrammingError
 from key_column_infos import get_key_column_infos
 from segment_utils import get_segment_table_from_info_schema_table_name, get_info_schema_table_name_from_segment_table
 from pprint import pprint
-from data_frame_utils import save_data_frame, load_latest_data_frame
+from data_frame_utils import save_data_frame, load_latest_data_frame, is_empty_data_frame
 from pandas.testing import assert_frame_equal
 
 # Returns the set of all queryable segment_tables that have all key_columns
@@ -26,13 +26,14 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
     # { segment_table:<segment_table>, columns_set: (<key_column>...) }
     segment_table_column_sets = {} 
         
-    query = "SELECT TABLE_NAME, COLUMN_NAME FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS"
+    query = "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS"
     if verbose:
         print("compute_segment_tables_df query:\n", query)
 
     query_batch_iterator = query_batch_generator(query, timeout_seconds=15, conn=conn)
 
     total_rows = 0
+    timestamp_column_name_counter = {}
     while True:
         try:
             batch_rows = next(query_batch_iterator)
@@ -44,27 +45,38 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
                 segment_table = get_segment_table_from_info_schema_table_name(info_schema_table_name)
 
                 column_name = result_row[1]
+                data_type = result_row[2]
                 
                 action = 'o' # column skipped
-                if column_name in ALL_SEARCH_COLUMNS and \
-                    matches_any(segment_table, SEARCH_SEGMENT_TABLES_SET) and \
+                if matches_any(segment_table, SEARCH_SEGMENT_TABLES_SET) and \
                     not matches_any(segment_table, SEARCH_IGNORE_SEGMENT_TABLES_SET):
-                    columns_set = segment_table_column_sets.get(segment_table, set())
-                    columns_set.add(column_name)
-                    segment_table_column_sets[segment_table] = columns_set
-                    action = '+' # column added
+
+                    if data_type.upper() == 'TIMESTAMP_NTZ':
+                        count = timestamp_column_name_counter.get(column_name,0)
+                        timestamp_column_name_counter[column_name] = count+1
+                        
+                    if column_name in ALL_SEARCH_COLUMNS:
+                        columns_set = segment_table_column_sets.get(segment_table, set())
+                        columns_set.add(column_name)
+                        segment_table_column_sets[segment_table] = columns_set
+                        action = '+' # column added
               
-                if verbose:      
-                    print(action, result_row)  
-                else: 
-                    if total_rows % dot_freq == 0:
-                        sys.stdout.write(action)
-                        sys.stdout.flush()
+                if action != 'o':
+                    if verbose:      
+                        print(action, result_row)  
+                    else: 
+                        if total_rows % dot_freq == 0:
+                            sys.stdout.write(action)
+                            sys.stdout.flush()
  
                 total_rows += 1                
         
         except StopIteration:
             break
+    
+    # report the top 10 set of timestamp column_names
+    ordered = dict(sorted(timestamp_column_name_counter.items(), key=lambda item: item[1],reverse=True))
+    print("\ntimestamp_column_name_counter:", ordered)
     
     # create the list of segment_table_dict keeping only those that meet column requirements
     segment_tables = list()
@@ -95,18 +107,19 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
 # Returns a segment_table_df either loaded from the latest csv file
 # or a newly computed and saved segments_table_df
 #  
-def get_segment_tables_df(conn: connector=None, load_latest: bool=True, verbose: bool=False) -> pd.DataFrame:
+def get_segment_tables_df(base_name: str=None, conn: connector=None, load_latest: bool=True, verbose: bool=False) -> pd.DataFrame:
     segment_tables_df = None
     csv_file = None
-    base_name = SEGMENT_TABLES_DF_DEFAULT_BASE_NAME
+    if base_name is None:
+        base_name = SEGMENT_TABLES_DF_DEFAULT_BASE_NAME
     # attempt to load segments_table_df from the most recent csv file
     if load_latest:
-        result = load_latest_data_frame(base_name)
-        if result:
-            csv_file, segment_tables_df = result
+        loaded = load_latest_data_frame(base_name)
+        if loaded is not None:
+            csv_file, segment_tables_df = loaded
 
     # compute and save a new segment_tables_df if needed
-    if not segment_tables_df:
+    if is_empty_data_frame(segment_tables_df):
         segment_tables_df = compute_segment_tables_df(conn=conn)
         csv_file = save_data_frame(base_name, segment_tables_df)
 
@@ -138,31 +151,30 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
 ################################################
 # Tests
 ################################################
-
-def test_get_segment_tables_df():
-    segment_tables_df = get_segment_tables_df()
-    assert len(segment_tables_df) > 0
     
-def test_compute_save_load_new_segment_tables_df():
+    
+def test_compute_save_load_get_new_segment_tables_df():
     saved_df = compute_segment_tables_df()
     
     base_name = "test_compute_save_load_new_segment_tables_df"
     saved_csv_file = save_data_frame(base_name, saved_df)
+    
     (loaded_csv_file, loaded_df) = load_latest_data_frame(base_name)
     
     assert loaded_csv_file == saved_csv_file, f"ERROR: expected:{saved_csv_file} not:{loaded_csv_file}"
     assert_frame_equal(loaded_df, saved_df)
-        
-        
+    
+    (latest__csv, latest_df) = get_segment_tables_df(base_name, load_latest=True)
+    assert_frame_equal(latest_df, saved_df)
+
 def test_find_segment_table_columns():
     segment_table = 'LOOKER_SOURCE.PUBLIC.ANGL_APP_OPN_TO_PIF'
     columns = find_segment_table_columns(segment_table)
     assert len(columns) > 0, f"ERROR: no columns found for segment_table: {segment_table}"
 
 def tests():
-    test_get_segment_tables_df()
     test_find_segment_table_columns()
-    test_compute_save_load_new_segment_tables_df()
+    test_compute_save_load_get_new_segment_tables_df()
     
     print()
     print("all tests passed in", os.path.basename(__file__))

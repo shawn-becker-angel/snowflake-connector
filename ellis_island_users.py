@@ -46,6 +46,7 @@ def compute_ellis_island_users_df(conn: connector=None, verbose: bool=True) -> p
             break
     print()
     ellis_island_users_df = pd.DataFrame(data=ellis_island_users, columns=ELLIS_ISLAND_USERS_DF_COLUMNS)
+    ellis_island_users_df = ellis_island_users_df.drop_duplicates(keep="first")
     return ellis_island_users_df
 
 # Returns an ellis_island_users_df either 
@@ -55,9 +56,9 @@ def get_ellis_island_users_df(conn: connector=None, load_latest: bool=True, verb
     csv_file = None
     users_df = None
     if load_latest:
-        result = load_latest_data_frame(ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME)
-        if result is not None:
-            (csv_file, users_df) = result
+        loaded = load_latest_data_frame(ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME)
+        if loaded is not None:
+            (csv_file, users_df) = loaded
             if verbose:
                 print(f"loaded {get_data_frame_len(users_df):,} ellis_island_users from {csv_file}")
             

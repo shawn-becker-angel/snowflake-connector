@@ -68,7 +68,22 @@ def query_batch_generator(query: str, conn: connector=None, batch_size: int=DEFA
         cur.close()
         if close_conn:
             conn.close()
+
+def execute_count_query(count_query: str, conn: connector=None, verbose: bool=False) -> int:
+    query_batch_iterator = query_batch_generator(count_query, conn=conn, batch_size=1, verbose=verbose)
+    while True:
+        try:
+            batch_rows = next(query_batch_iterator)
+            for result_row in batch_rows:
+                count = result_row[0]
+                return count
+        except StopIteration:
+            break
+    return 0
+
     
+
+
 ################################################
 # Tests
 ################################################
