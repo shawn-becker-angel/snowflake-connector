@@ -51,10 +51,10 @@ def compute_ellis_island_users_df(conn: connector=None, verbose: bool=True) -> p
 # Returns an ellis_island_users_df either 
 # loaded from the latest csv file
 # or newly computed and saved to a new csv file
-def get_ellis_island_users_df(conn: connector=None, use_latest: bool=True, verbose: bool=True) -> Tuple[str, pd.DataFrame]:
+def get_ellis_island_users_df(conn: connector=None, load_latest: bool=True, verbose: bool=True) -> Tuple[str, pd.DataFrame]:
     csv_file = None
     users_df = None
-    if use_latest:
+    if load_latest:
         result = load_latest_data_frame(ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME)
         if result is not None:
             (csv_file, users_df) = result
@@ -77,7 +77,7 @@ def get_ellis_island_users_df(conn: connector=None, use_latest: bool=True, verbo
 
 def test_get_ellis_island_users_df():
     conn = create_connector()
-    (users_csv_file, users_df) = get_ellis_island_users_df(conn=conn, use_latest=False)
+    (users_csv_file, users_df) = get_ellis_island_users_df(conn=conn, load_latest=False)
     assert len(users_df) > 0, f"ERROR: zero ellis_island_users"
 
 def tests():

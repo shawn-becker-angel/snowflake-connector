@@ -17,7 +17,7 @@ from data_frame_utils import save_data_frame, load_latest_data_frame
 from pandas.testing import assert_frame_equal
 
 # Returns the set of all queryable segment_tables that have all key_columns
-def compute_segment_tables_df(conn: connector=None, verbose: bool=False) -> pd.DataFrame:
+def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.DataFrame:
     
     dot_freq = 10000
     dot_char = '.'
@@ -66,17 +66,19 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=False) -> pd.D
         except StopIteration:
             break
     
-    # create the list of segment_table_dict filtered according to their column_sets
+    # create the list of segment_table_dict keeping only those that meet column requirements
     segment_tables = list()
     for segment_table, columns_set in segment_table_column_sets.items():
         segment_table_dict = { 'segment_table': segment_table }        
         if columns_set >= ALL_SEARCH_COLUMNS:
             # only a few segment_tables have the more restrictive 'all_search_columns' property
             segment_table_dict['columns'] = ALL_SEARCH_COLUMNS_STR
+            segment_tables.append(segment_table_dict)
+
         elif columns_set >= ALL_KEY_COLUMNS:
             # all segment_tables have the less restrictive 'all_key_columns' property
             segment_table_dict['columns'] = ALL_KEY_COLUMNS_STR
-        segment_tables.append(segment_table_dict)
+            segment_tables.append(segment_table_dict)
 
     if verbose:
         print()
@@ -95,6 +97,7 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=False) -> pd.D
 #  
 def get_segment_tables_df(conn: connector=None, load_latest: bool=True, verbose: bool=False) -> pd.DataFrame:
     segment_tables_df = None
+    csv_file = None
     base_name = SEGMENT_TABLES_DF_DEFAULT_BASE_NAME
     # attempt to load segments_table_df from the most recent csv file
     if load_latest:
