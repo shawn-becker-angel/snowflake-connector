@@ -1,21 +1,16 @@
 import sys
-import os
-import glob
-import math
 import pandas as pd
 import snowflake.connector as connector
-from snowflake.connector import ProgrammingError
 from constants import *   
 from timefunc import timefunc
 from time import sleep, perf_counter
-from typing import Set, List, Dict, Optional, Tuple
-import datetime
+from typing import Dict
 from functools import cache
 from query_generator import create_connector, query_batch_generator, execute_count_query
 from utils import is_empty_list
 from data_frame_utils import is_empty_data_frame
 from ellis_island_users import get_ellis_island_users_df
-from segment_tables import get_segment_tables_df, find_segment_table_columns
+from segment_tables import get_first_timestamp_column_in_column_set, get_segment_tables_df, get_segment_table_dicts, remove_extra_timestamp_columns_in_column_set, get_first_timestamp_column_in_column_set
 from data_frame_utils import save_data_frame, get_data_frame_len, is_empty_data_frame, load_latest_data_frame
 
 
@@ -37,12 +32,10 @@ def compute_augmented_segment_users_df(
     segment_table = segment_table_dict['segment_table']
     segment_users_columns = set(segment_table_dict['columns'].split("-"))
     
+    # get the first timestamp_column in segment_users_columns 
+    first_timestamp_column = get_first_timestamp_column_in_column_set(segment_users_columns)
     # keep only the first timestamp column in segment_users_columns set
-    timestamp_columns = segment_users_columns.intersection(ALL_TIMESTAMP_COLUMNS)
-    first_timestamp_column = timestamp_columns[0] if len(timestamp_columns) > 0 else None
-    if first_timestamp_column is not None and len(timestamp_columns) > 0:
-        unused_timestamp_columns = timestamp_columns - first_timestamp_column
-        segment_users_columns = segment_users_columns - unused_timestamp_columns
+    segment_users_columns = remove_extra_timestamp_columns_in_column_set(segment_users_columns)
     
     segment_users_columns = list( segment_users_columns)
     users_select_clause = ",".join(segment_users_columns)
@@ -139,8 +132,8 @@ def compute_and_save_augmented_segment_users_df_for_all_segment_tables(verbose: 
         print("get_segment_tables_df")
     (_, segment_tables_df) = get_segment_tables_df(conn=conn, load_latest=True)
     
-    # convert 2-column dataframe to a list of 2-property dicts
-    segment_table_dicts = [dict(zip(list(segment_tables_df.columns), list(row))) for row in segment_tables_df.values]
+    # converts 2-column dataframe to a list of 2-property dicts
+    segment_table_dicts = get_segment_table_dicts(segment_tables_df)
     if verbose:
         print("num segment_table_dicts:", len(segment_table_dicts))
     

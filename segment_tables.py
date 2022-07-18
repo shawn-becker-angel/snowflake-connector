@@ -3,7 +3,7 @@ import sys
 import pandas as pd
 from constants import *   
 from typing import Set, List, Dict, Optional, Tuple
-from query_generator import query_batch_generator, create_connector
+from query_generator import query_batch_generator, create_connector, execute_batched_select_query
 from utils import matches_any, find_latest_file, is_readable_file
 from functools import cache
 import datetime
@@ -15,6 +15,21 @@ from segment_utils import get_segment_table_from_info_schema_table_name, get_inf
 from pprint import pprint
 from data_frame_utils import save_data_frame, load_latest_data_frame, is_empty_data_frame
 from pandas.testing import assert_frame_equal
+
+# return the first timestamp column in the given columns set
+def get_first_timestamp_column_in_column_set(columns_set: Set[str]) -> Optional[str]:
+    timestamp_columns_set = columns_set.intersection(ALL_TIMESTAMP_COLUMNS)
+    first_timestamp_column = sorted(list(timestamp_columns_set))[0] if len(timestamp_columns_set) > 0 else None
+    return first_timestamp_column
+    
+# keep only the first timestamp column in the given columns set
+def remove_extra_timestamp_columns_in_column_set(columns_set: Set[str]) -> Set[str]:
+    timestamp_columns_set = columns_set.intersection(ALL_TIMESTAMP_COLUMNS)
+    first_timestamp_column = sorted(list(timestamp_columns_set))[0] if len(timestamp_columns_set) > 0 else None
+    if first_timestamp_column is not None and len(timestamp_columns_set) > 0:
+        unused_timestamp_columns = timestamp_columns_set - set([first_timestamp_column])
+        columns_set = columns_set - unused_timestamp_columns
+    return columns_set
 
 # Returns the set of all queryable segment_tables that have all key_columns
 def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.DataFrame:
@@ -81,15 +96,11 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
     # create the list of segment_table_dict keeping only those that meet column requirements
     segment_tables = list()
     for segment_table, columns_set in segment_table_column_sets.items():
+        columns_set = remove_extra_timestamp_columns_in_column_set(columns_set)
+        columns_str = "-".join([x for x in columns_set])
         segment_table_dict = { 'segment_table': segment_table }        
-        if columns_set >= ALL_SEARCH_COLUMNS:
-            # only a few segment_tables have the more restrictive 'all_search_columns' property
-            segment_table_dict['columns'] = ALL_SEARCH_COLUMNS_STR
-            segment_tables.append(segment_table_dict)
-
-        elif columns_set >= ALL_KEY_COLUMNS:
-            # all segment_tables have the less restrictive 'all_key_columns' property
-            segment_table_dict['columns'] = ALL_KEY_COLUMNS_STR
+        if columns_set >= ALL_KEY_COLUMNS:
+            segment_table_dict['columns'] = columns_str
             segment_tables.append(segment_table_dict)
 
     if verbose:
@@ -100,9 +111,12 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
 
     # create a DataFrame from the list of segment_table dictionaries
     segment_tables_df = pd.DataFrame(data=segment_tables, columns=SEGMENT_TABLES_DF_COLUMNS)
-
     return segment_tables_df
 
+# Returns the result of converting a 2-column dataframe to a list of 2-property dicts
+def get_segment_table_dicts(segment_tables_df: pd.DataFrame) -> List[Dict[str,str]]:
+    segment_table_dicts = [dict(zip(list(segment_tables_df.columns), list(row))) for row in segment_tables_df.values]
+    return segment_table_dicts
 
 # Returns a segment_table_df either loaded from the latest csv file
 # or a newly computed and saved segments_table_df
@@ -123,7 +137,7 @@ def get_segment_tables_df(base_name: str=None, conn: connector=None, load_latest
         segment_tables_df = compute_segment_tables_df(conn=conn)
         csv_file = save_data_frame(base_name, segment_tables_df)
 
-    return (csv_file, segment_tables_df)
+    return segment_tables_df
 
 # Queries snowflake to return a list of column names for the given segment_table
 def find_segment_table_columns(segment_table: str, conn: connector=None, verbose: bool=False) -> List[str]:
@@ -131,22 +145,14 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
     # convert segment_table to info_schema_table_name
     info_schema_table_name = get_info_schema_table_name_from_segment_table(segment_table)
     
-    # select all column_names from table
-    query = f"SELECT COLUMN_NAME FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS where TABLE_NAME='{info_schema_table_name}'"
-    if verbose:
-        print("segment_table_has_columns query:\n", query)
+    select_columns = ['COLUMN_NAME']
+    select_str =  ','.join(select_columns)
+
+    select_query = f"SELECT {select_str} FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS where TABLE_NAME='{info_schema_table_name}'"
     
-    query_batch_iterator = query_batch_generator(query, timeout_seconds=5, conn=conn)
-    columns_found = set()
-    while True:
-        try:
-            batch_rows = next(query_batch_iterator)
-            for result_row in batch_rows:
-                column_name = result_row[0]
-                columns_found.add(column_name)
-        except StopIteration:
-            break
-    return columns_found
+    segment_table_columns_df = execute_batched_select_query(select_query, select_columns, conn=conn, batch_size=100, timeout_seconds=5, verbose=verbose)
+    return list(segment_table_columns_df.values)
+    
 
 ################################################
 # Tests
@@ -172,9 +178,21 @@ def test_find_segment_table_columns():
     columns = find_segment_table_columns(segment_table)
     assert len(columns) > 0, f"ERROR: no columns found for segment_table: {segment_table}"
 
+def test_timestamp_columns_in_column_set():
+    columns_set = ALL_SEARCH_COLUMNS
+    columns_set = remove_extra_timestamp_columns_in_column_set(columns_set)
+    v = ALL_SEARCH_COLUMNS - ALL_TIMESTAMP_COLUMNS
+    v.add("RECEIVED_AT")
+    assert columns_set == v
+    
+    first_timesamp_column = get_first_timestamp_column_in_column_set(columns_set)
+    assert first_timesamp_column == "RECEIVED_AT"
+
+
 def tests():
+    test_timestamp_columns_in_column_set()
     test_find_segment_table_columns()
-    test_compute_save_load_get_new_segment_tables_df()
+    # test_compute_save_load_get_new_segment_tables_df()
     
     print()
     print("all tests passed in", os.path.basename(__file__))
