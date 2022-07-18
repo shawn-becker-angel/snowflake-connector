@@ -10,6 +10,8 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
     # return a dictionary of query_names -> DataFrame
     named_data_frames = {}
     
+    batch_size = 1000
+    
     segment_table = segment_table_dict['segment_table']
     segment_users_columns = set(segment_table_dict['columns'].split("-"))
     
@@ -38,7 +40,7 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
                 on wt.user_id = ei.uuid\
             where ei.uuid is not NULL {timestamp_clause}"
             
-        rid_df = execute_batched_select_query(rid_query, segment_users_columns, conn=conn)
+        rid_df = execute_batched_select_query(rid_query, segment_users_columns, batch_size=batch_size, conn=conn)
         named_data_frames[f'{segment_table}_rid_df'] = rid_df
         
     user_id_query = f"\
@@ -48,7 +50,7 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
             on id.user_id = ei.uuid\
         where ei.uuid is not NULL {timestamp_clause}"
     
-    user_id_df = execute_batched_select_query(user_id_query, segment_users_columns, conn=conn, verbose=verbose)
+    user_id_df = execute_batched_select_query(user_id_query, segment_users_columns, batch_size=batch_size, conn=conn, verbose=verbose)
     named_data_frames[f'{segment_table}_user_id_df'] = user_id_df
         
     email_username_query = f"\
@@ -58,7 +60,7 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
             on id.email = ei.username\
         where ei.uuid is not NULL {timestamp_clause}"
     
-    email_username_df = execute_batched_select_query(email_username_query, segment_users_columns, conn=conn)
+    email_username_df = execute_batched_select_query(email_username_query, segment_users_columns, batch_size=batch_size, conn=conn)
     named_data_frames[f'{segment_table}_email_username_df'] = email_username_df
 
     user_id_persona_query = f"\
@@ -70,7 +72,7 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
             on pu.id = ei.uuid\
         where ei.uuid is not NULL {timestamp_clause}"
     
-    user_id_persona_df = execute_batched_select_query(user_id_persona_query, segment_users_columns, conn=conn)
+    user_id_persona_df = execute_batched_select_query(user_id_persona_query, segment_users_columns, batch_size=batch_size, conn=conn)
     named_data_frames[f'{segment_table}_user_id_persona_df'] = user_id_persona_df
         
     return named_data_frames
