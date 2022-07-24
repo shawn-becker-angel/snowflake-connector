@@ -1,9 +1,18 @@
 from typing import Dict
 from constants import *
 import snowflake.connector as connector
-from query_generator import create_connector, execute_batched_select_query
+from query_generator import create_connector, execute_batched_select_query, execute_count_query, clean_query
 import pandas as pd
 from segment_tables import get_first_timestamp_column_in_column_set, get_segment_tables_df, get_segment_table_dicts, remove_extra_timestamp_columns_in_column_set
+
+
+def test_execute_count_query(select_query: str, conn: connector=None, verbose: bool=True):
+    count_query = select_query.replace("select distinct", "select count(distinct")
+    count_query = count_query.replace(" from ", ") from ")
+    count_query = count_query.replace(" as valid_uuid","")
+    count_query = " ".join(count_query.strip().split())
+    count = execute_count_query(count_query, conn=conn, verbose=verbose)
+    print(f"count:{count}")
 
 def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str,str], conn: connector=None, verbose: bool=True) -> Dict[str, pd.DataFrame]:
 
@@ -21,6 +30,7 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
         
     segment_users_columns = list( segment_users_columns)
     select_clause = ', '.join([f"id.{x}" for x in segment_users_columns]) + ', ei.uuid as valid_uuid'
+    not_null_clause = " and ".join([f"id.{x}" for x in segment_users_columns]) + " and ei.uuid is not NULL"
     timestamp_clause = f" and {first_timestamp_column} >= '2021-04-01'" if first_timestamp_column is not None else ""
     segment_users_columns.append('valid_uuid')
 
@@ -38,7 +48,10 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
                 on id.rid = wt.rid\
             join {ellis_island_table} ei\
                 on wt.user_id = ei.uuid\
-            where ei.uuid is not NULL {timestamp_clause}"
+            where {not_null_clause}{timestamp_clause}"
+         
+        if verbose:   
+            test_execute_count_query(rid_query, conn=conn, verbose=verbose)
             
         rid_df = execute_batched_select_query(rid_query, segment_users_columns, batch_size=batch_size, conn=conn)
         named_data_frames[f'{segment_table}_rid_df'] = rid_df
@@ -48,7 +61,10 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
         from {identifies_table} id\
         join {ellis_island_table} ei\
             on id.user_id = ei.uuid\
-        where ei.uuid is not NULL {timestamp_clause}"
+        where {not_null_clause}{timestamp_clause}"
+
+    if verbose:   
+        test_execute_count_query(user_id_query, conn=conn, verbose=verbose)
     
     user_id_df = execute_batched_select_query(user_id_query, segment_users_columns, batch_size=batch_size, conn=conn, verbose=verbose)
     named_data_frames[f'{segment_table}_user_id_df'] = user_id_df
@@ -58,7 +74,10 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
         from {identifies_table} id\
         join {ellis_island_table} ei\
             on id.email = ei.username\
-        where ei.uuid is not NULL {timestamp_clause}"
+        where {not_null_clause}{timestamp_clause}"
+    
+    if verbose:   
+        test_execute_count_query(email_username_query, conn=conn, verbose=verbose)
     
     email_username_df = execute_batched_select_query(email_username_query, segment_users_columns, batch_size=batch_size, conn=conn)
     named_data_frames[f'{segment_table}_email_username_df'] = email_username_df
@@ -70,15 +89,18 @@ def find_ellis_island_uuids_for_identifies_user_ids(segment_table_dict: Dict[str
             on id.user_id = pu.id  \
         join {ellis_island_table} ei\
             on pu.id = ei.uuid\
-        where ei.uuid is not NULL {timestamp_clause}"
+        where {not_null_clause}{timestamp_clause}"
     
+    if verbose:   
+        test_execute_count_query(user_id_persona_query, conn=conn, verbose=verbose)
+
     user_id_persona_df = execute_batched_select_query(user_id_persona_query, segment_users_columns, batch_size=batch_size, conn=conn)
     named_data_frames[f'{segment_table}_user_id_persona_df'] = user_id_persona_df
         
     return named_data_frames
 
 def compute_ellis_island_uuids_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
-    segment_tables_df = get_segment_tables_df(load_latest=False, verbose=verbose)
+    segment_tables_df = get_segment_tables_df(load_latest=True, verbose=verbose)
     
     # converts 2-column dataframe to a list of 2-property dicts
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)

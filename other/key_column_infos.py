@@ -109,10 +109,6 @@ def compute_key_column_infos(segment_tables: Set[str], verbose: bool=True) -> Li
         for segment_table in sorted_segment_tables:
             cur = None
             try:
-                # Skip the segment_tables that typically timeout
-                if segment_table in SEGMENT_TABLES_THAT_TIMEOUT:
-                    continue
-
                 # find the timestamp column to use for timestamp filtering this segment_table (or None)
                 timestamp_column = find_first_sorted_timestamp_column(segment_table, conn=conn)
                 query_info = get_key_column_info_query_info(segment_table, timestamp_column=timestamp_column) 

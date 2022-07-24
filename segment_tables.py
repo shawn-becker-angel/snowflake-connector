@@ -3,14 +3,13 @@ import sys
 import pandas as pd
 from constants import *   
 from typing import Set, List, Dict, Optional, Tuple
-from query_generator import query_batch_generator, create_connector, execute_batched_select_query
+from query_generator import query_batch_generator, create_connector, execute_batched_select_query, execute_single_query, execute_count_query, execute_simple_query
 from utils import matches_any, find_latest_file, is_readable_file
 from functools import cache
 import datetime
 from timefunc import timefunc
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
-from key_column_infos import get_key_column_infos
 from segment_utils import get_segment_table_from_info_schema_table_name, get_info_schema_table_name_from_segment_table
 from pprint import pprint
 from data_frame_utils import save_data_frame, load_latest_data_frame, is_empty_data_frame
@@ -121,7 +120,7 @@ def get_segment_table_dicts(segment_tables_df: pd.DataFrame) -> List[Dict[str,st
 # Returns a segment_table_df either loaded from the latest csv file
 # or a newly computed and saved segments_table_df
 #  
-def get_segment_tables_df(base_name: str=None, conn: connector=None, load_latest: bool=True, verbose: bool=False) -> pd.DataFrame:
+def get_segment_tables_df(base_name: str=None, conn: connector=None, load_latest: bool=True, verbose: bool=False) -> Tuple[str,pd.DataFrame]:
     segment_tables_df = None
     csv_file = None
     if base_name is None:
@@ -137,7 +136,7 @@ def get_segment_tables_df(base_name: str=None, conn: connector=None, load_latest
         segment_tables_df = compute_segment_tables_df(conn=conn)
         csv_file = save_data_frame(base_name, segment_tables_df)
 
-    return segment_tables_df
+    return [csv_file, segment_tables_df]
 
 # Queries snowflake to return a list of column names for the given segment_table
 def find_segment_table_columns(segment_table: str, conn: connector=None, verbose: bool=False) -> List[str]:
@@ -152,12 +151,50 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
     
     segment_table_columns_df = execute_batched_select_query(select_query, select_columns, conn=conn, batch_size=100, timeout_seconds=5, verbose=verbose)
     return list(segment_table_columns_df.values)
+
+def clone_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=True, preview_only: bool=True) -> List[str]:
+    show_tables_columns = ['created_on','name','database_name','schema_name	kind','comment','cluster_by	rows','bytes','owner','retention_time','automatic_clustering','change_tracking','search_optimization','search_optimization_progress','search_optimization_bytes','is_external']
+    show_tables_query = "show tables like '%IDENTIFIES' in SEGMENT.IDENTIFIES_METADATA"
+    results = execute_simple_query(show_tables_query)
+    existing_info_schema_table_names = []
+    for line in results:
+        line_dict = dict(zip(show_tables_columns, line))
+        existing_info_schema_table_names.append(f"{line_dict['name']}")
     
+    newly_cloned_tables = []
+    for row in segment_tables_df.values:
+        segment_table = row[0]
+        info_schema_table_name = get_info_schema_table_name_from_segment_table(segment_table)
+        if info_schema_table_name not in existing_info_schema_table_names:
+            cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{info_schema_table_name}"
+            clone_query = f"create table if not exists {cloned_table} clone {segment_table}"
+            if verbose:
+                print(clone_query)
+            if not preview_only:
+                try:
+                    source_count = execute_count_query(f"select count(*) from {segment_table}")
+                    if verbose:
+                        print(f"source_count:{source_count}")
+                    execute_single_query(clone_query, conn=conn, verbose=verbose)
+                    cloned_count = execute_count_query(f"select count(*) from {cloned_table}")
+                    if verbose:
+                            print(f"cloned_count:{cloned_count}")
+                    assert cloned_count == source_count, f"ERROR: expected cloned_count:{source_count} but got {cloned_count}"
+                    newly_cloned_tables.append(info_schema_table_name)
+                except Exception as e:
+                    print(f"{type(e)} {str(e)}")
+    if verbose:
+        print("newly_cloned_tables:\n", newly_cloned_tables)
+    return newly_cloned_tables
+
 
 ################################################
 # Tests
 ################################################
-    
+
+def test_clone_latest_segment_tables_df():
+    [csv_file,latest_df] = get_segment_tables_df(load_latest=True)
+    clone_segment_tables(latest_df, preview_only=False)
     
 def test_compute_save_load_get_new_segment_tables_df():
     saved_df = compute_segment_tables_df()
@@ -172,7 +209,7 @@ def test_compute_save_load_get_new_segment_tables_df():
     
     (latest__csv, latest_df) = get_segment_tables_df(base_name, load_latest=True)
     assert_frame_equal(latest_df, saved_df)
-
+        
 def test_find_segment_table_columns():
     segment_table = 'LOOKER_SOURCE.PUBLIC.ANGL_APP_OPN_TO_PIF'
     columns = find_segment_table_columns(segment_table)
@@ -190,9 +227,10 @@ def test_timestamp_columns_in_column_set():
 
 
 def tests():
-    test_timestamp_columns_in_column_set()
-    test_find_segment_table_columns()
+    # test_timestamp_columns_in_column_set()
+    # test_find_segment_table_columns()
     # test_compute_save_load_get_new_segment_tables_df()
+    test_clone_latest_segment_tables_df()
     
     print()
     print("all tests passed in", os.path.basename(__file__))

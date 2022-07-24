@@ -4,7 +4,7 @@ import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
 from constants import *   
 from timefunc import timefunc
-from typing import List
+from typing import List, Any
 
 def create_connector(verbose: bool=True):
     conn = connector.connect(
@@ -22,6 +22,10 @@ def create_connector(verbose: bool=True):
 
     return conn
 
+def clean_query(query: str) -> str:
+    # strip external white-spaces and replace multiple 
+    # internal white-spaces with single white-space
+    return " ".join(query.strip().split())
 
 # Returns a generator function that 
 # 1. executes a query
@@ -76,28 +80,66 @@ def query_batch_generator(
         if close_conn:
             conn.close()
 
+# Use this to execute queries with no processed result rows
+# like create, clone, alter, drop
+def execute_single_query(
+    single_query: str, 
+    conn: connector=None, 
+    timeout_seconds: int=DEFAULT_TIMEOUT_SECONDS, 
+    verbose: bool=False) -> None:
+
+    if verbose:
+        print(f"execute_create_query.single_query:\n{single_query};")
+    query_batch_iterator = query_batch_generator(single_query, conn=conn, timeout_seconds=timeout_seconds, batch_size=1, verbose=verbose)
+    while True:
+        try:
+            next(query_batch_iterator)
+        except StopIteration:
+            break
+
+# Use this to execute a query and get all result rows at once
+def execute_simple_query(
+    query: str, 
+    conn: connector=None, 
+    timeout_seconds: int=DEFAULT_TIMEOUT_SECONDS, 
+    verbose: bool=False) -> List[Any]:
+
+    if verbose:
+        print(f"execute_simple_query:\n{query};")
+    query_batch_iterator = query_batch_generator(query, conn=conn, timeout_seconds=timeout_seconds, batch_size=1000, verbose=verbose)
+    result_rows = []
+    while True:
+        try:
+            batch_rows = next(query_batch_iterator)
+            result_rows.extend(batch_rows)
+            batch_rows = []
+        except StopIteration:
+            break
+    return result_rows
+
 def execute_count_query(
     count_query: str, 
     conn: connector=None, 
     timeout_seconds: int=DEFAULT_TIMEOUT_SECONDS, 
     verbose: bool=False) -> int:
-    
+
+    count = 0
+    if verbose:
+        print(f"execute_count_query.count_query:\n{clean_query(count_query)};")
+        
     query_batch_iterator = query_batch_generator(count_query, conn=conn, timeout_seconds=timeout_seconds, batch_size=1, verbose=verbose)
     while True:
         try:
             batch_rows = next(query_batch_iterator)
             for result_row in batch_rows:
                 count = result_row[0]
-                return count
         except StopIteration:
             break
-    return 0
+    if verbose:
+        print(f"execute_count_query.count_query:\n{count_query};")
+        print(f"execute_count_query.count:\n{count:,};")
 
-def clean_query(query: str) -> str:
-    # strip external white-spaces
-    query = query.strip()
-    # replace multiple internal white-spaces with single white-space
-    return " ".join(query.split())
+    return count
 
 def execute_batched_select_query(
     select_query: str, 
@@ -107,7 +149,7 @@ def execute_batched_select_query(
     batch_size: int=DEFAULT_BATCH_SIZE, 
     batch_dot_frequency: int=100,
     batch_dot: str='.',
-    verbose: bool=False) -> pd.DataFrame:
+    verbose: bool=True) -> pd.DataFrame:
     
     if verbose:
         print(f"execute_batched_select_query.select_query:\n{clean_query(select_query)};")
@@ -131,6 +173,7 @@ def execute_batched_select_query(
             break
     union_df = union_df.drop_duplicates(keep="first")
     return union_df
+
 
 ################################################
 # Tests
