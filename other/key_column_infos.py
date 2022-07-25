@@ -12,6 +12,8 @@ import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
 from segment_utils import get_info_schema_table_name_from_segment_table
 
+KEY_COLUMN_COUNTS_MIN_TIMESTAMP = "'2022-01-01'"
+KEY_COLUMN_COUNTS_MAX_TIMESTAMP = "'2022-07-08'"
 
 # Returns the query template used by get_key_column_info_query_info()
 @cache
