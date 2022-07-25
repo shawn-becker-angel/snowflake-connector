@@ -15,22 +15,7 @@ from pprint import pprint
 from data_frame_utils import save_data_frame, load_latest_data_frame, is_empty_data_frame
 from pandas.testing import assert_frame_equal
 
-# return the first timestamp column in the given columns set
-def get_first_timestamp_column_in_column_set(columns_set: Set[str]) -> Optional[str]:
-    timestamp_columns_set = columns_set.intersection(ALL_TIMESTAMP_COLUMNS)
-    first_timestamp_column = sorted(list(timestamp_columns_set))[0] if len(timestamp_columns_set) > 0 else None
-    return first_timestamp_column
-    
-# keep only the first timestamp column in the given columns set
-def remove_extra_timestamp_columns_in_column_set(columns_set: Set[str]) -> Set[str]:
-    timestamp_columns_set = columns_set.intersection(ALL_TIMESTAMP_COLUMNS)
-    first_timestamp_column = sorted(list(timestamp_columns_set))[0] if len(timestamp_columns_set) > 0 else None
-    if first_timestamp_column is not None and len(timestamp_columns_set) > 0:
-        unused_timestamp_columns = timestamp_columns_set - set([first_timestamp_column])
-        columns_set = columns_set - unused_timestamp_columns
-    return columns_set
-
-# Returns the set of all queryable segment_tables that have all key_columns
+# Returns the set of all queryable segment_tables that have all key_columns as well as any optinal ALL_SEARCH_COLUMNS
 def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.DataFrame:
     
     dot_freq = 10000
@@ -95,7 +80,6 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
     # create the list of segment_table_dict keeping only those that meet column requirements
     segment_tables = list()
     for segment_table, columns_set in segment_table_column_sets.items():
-        columns_set = remove_extra_timestamp_columns_in_column_set(columns_set)
         columns_str = "-".join([x for x in columns_set])
         segment_table_dict = { 'segment_table': segment_table }        
         if columns_set >= ALL_KEY_COLUMNS:
@@ -112,7 +96,15 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
     segment_tables_df = pd.DataFrame(data=segment_tables, columns=SEGMENT_TABLES_DF_COLUMNS)
     return segment_tables_df
 
-# Returns the result of converting a 2-column dataframe to a list of 2-property dicts
+# Returns the latest csv and df of a recomputed and auto-saved segment_tables
+def compute_and_save_new_segment_tables_df() -> Tuple[str, pd.DataFrame]:
+    saved_df = compute_segment_tables_df()
+    saved_csv_file = save_data_frame(SEGMENT_TABLES_DF_DEFAULT_BASE_NAME, saved_df)
+    (latest_csv, latest_df) = get_segment_tables_df(load_latest=True)
+    assert_frame_equal(latest_df, saved_df)
+    return (latest_csv, latest_df)
+
+# Returns a list of 2-property dicts from a 2-column dataframe
 def get_segment_table_dicts(segment_tables_df: pd.DataFrame) -> List[Dict[str,str]]:
     segment_table_dicts = [dict(zip(list(segment_tables_df.columns), list(row))) for row in segment_tables_df.values]
     return segment_table_dicts
@@ -195,6 +187,9 @@ def clone_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=T
 def test_clone_latest_segment_tables_df():
     [csv_file,latest_df] = get_segment_tables_df(load_latest=True)
     clone_segment_tables(latest_df, preview_only=False)
+
+def test_compute_and_save_new_segment_tables_df():
+    csv, df = compute_and_save_new_segment_tables_df()
     
 def test_compute_save_load_get_new_segment_tables_df():
     saved_df = compute_segment_tables_df()
@@ -215,22 +210,11 @@ def test_find_segment_table_columns():
     columns = find_segment_table_columns(segment_table)
     assert len(columns) > 0, f"ERROR: no columns found for segment_table: {segment_table}"
 
-def test_timestamp_columns_in_column_set():
-    columns_set = ALL_SEARCH_COLUMNS
-    columns_set = remove_extra_timestamp_columns_in_column_set(columns_set)
-    v = ALL_SEARCH_COLUMNS - ALL_TIMESTAMP_COLUMNS
-    v.add("RECEIVED_AT")
-    assert columns_set == v
-    
-    first_timesamp_column = get_first_timestamp_column_in_column_set(columns_set)
-    assert first_timesamp_column == "RECEIVED_AT"
-
-
 def tests():
-    # test_timestamp_columns_in_column_set()
-    # test_find_segment_table_columns()
-    # test_compute_save_load_get_new_segment_tables_df()
-    test_clone_latest_segment_tables_df()
+    test_compute_and_save_new_segment_tables_df()
+    test_find_segment_table_columns()
+    # test_clone_latest_segment_tables_df()
+
     
     print()
     print("all tests passed in", os.path.basename(__file__))

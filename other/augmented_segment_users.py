@@ -10,7 +10,7 @@ from query_generator import create_connector, query_batch_generator, execute_cou
 from utils import is_empty_list
 from data_frame_utils import is_empty_data_frame
 from ellis_island_users import get_ellis_island_users_df
-from segment_tables import get_first_timestamp_column_in_column_set, get_segment_tables_df, get_segment_table_dicts, remove_extra_timestamp_columns_in_column_set, get_first_timestamp_column_in_column_set
+from segment_tables import get_segment_tables_df, get_segment_table_dicts
 from data_frame_utils import save_data_frame, get_data_frame_len, is_empty_data_frame, load_latest_data_frame
 
 
@@ -32,16 +32,10 @@ def compute_augmented_segment_users_df(
     segment_table = segment_table_dict['segment_table']
     segment_users_columns = set(segment_table_dict['columns'].split("-"))
     
-    # get the first timestamp_column in segment_users_columns 
-    first_timestamp_column = get_first_timestamp_column_in_column_set(segment_users_columns)
-    # keep only the first timestamp column in segment_users_columns set
-    segment_users_columns = remove_extra_timestamp_columns_in_column_set(segment_users_columns)
-    
     segment_users_columns = list( segment_users_columns)
     users_select_clause = ",".join(segment_users_columns)
     users_not_null_clause = " and ".join([f"{x} is not NULL" for x in segment_users_columns])
-    users_timestamp_clause = f" and {first_timestamp_column} >= '2021-04-01'" if first_timestamp_column is not None else ""
-    segment_users_from_where_clause = f" from {segment_table} WHERE {users_not_null_clause}{users_timestamp_clause}"
+    segment_users_from_where_clause = f" from {segment_table} WHERE {users_not_null_clause}"
     segment_users_select_query = f"SELECT DISTINCT {users_select_clause} {segment_users_from_where_clause}"
     segment_users_count_query = f"SELECT COUNT (DISTINCT {users_select_clause}) {segment_users_from_where_clause}"
     
