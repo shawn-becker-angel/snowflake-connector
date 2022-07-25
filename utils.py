@@ -4,6 +4,7 @@ from typing import List, Optional
 import pandas as pd
 import string
 import random
+import pathlib
 
 
 # Converts string v to a bool
@@ -43,6 +44,11 @@ def find_latest_file(pattern) -> Optional[str]:
         # return last item in list
         return files[-1]
     return None
+
+# Returns exension ".txt" for file_name "my_file.txt" 
+# from https://www.geeksforgeeks.org/how-to-get-file-extension-in-python/# 
+def get_file_name_extension(file_name: str) -> str:
+    return pathlib.Path(file_name).suffix
 
 # from https://www.geeksforgeeks.org/python-generate-random-string-of-given-length/
 def generate_random_string(N: int=7):

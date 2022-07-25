@@ -5,6 +5,7 @@ import datetime
 import snowflake.connector as connector
 from utils import is_readable_file, find_latest_file, generate_random_string
 from pprint import pprint
+from constants import *
 
 # Returns True if df is None or has zero rows
 def is_empty_data_frame(df: pd.DataFrame) -> bool:
@@ -14,24 +15,40 @@ def is_empty_data_frame(df: pd.DataFrame) -> bool:
 def get_data_frame_len(df: pd.DataFrame) -> int:
     return 0 if is_empty_data_frame(df) else len(df)
 
-# Saves the DataFrame (without index column) to a new timestamped 
-# base_name csv file and returns the new csv_file
-def save_data_frame(base_name: str, df: pd.DataFrame) -> str:
+# Saves the DataFrame (sets column ID as index column) 
+# to a new data_file with the given base_name, current timestamp and 
+# file format extension (CSV_FORMAT | FEATHER_FORMAT) and 
+# returns the name of the new data_file
+def save_data_frame(base_name: str, df: pd.DataFrame, format: str=CSV_FORMAT) -> str:
+    df = df.set_index(keys=["ID"])
     utc_now = datetime.datetime.utcnow().isoformat()
-    csv_file = f"/tmp/{base_name}-{utc_now}.csv"
-    df.to_csv(csv_file, index=False)
-    return csv_file
+    data_file = f"/tmp/{base_name}-{utc_now}.{format}"
+    if format == CSV_FORMAT:
+        df.to_csv(data_file) 
+    elif format == FEATHER_FORMAT: 
+        df.to_feather(data_file)
+    return data_file
 
-# Finds the latest csv file for the given base_name and returns the csv_file 
-# and the loaded DataFrame (without index column) or None if latest csv
-# file not found or is not readable
+# Uses the data_file's file format extension (CSV_FORMAT | FEATHER_FORMAT)
+# to load the DataFrame (sets column ID as index column) or None if the given data_file
+# is not found or is not readable
+def load_data_frame(data_file: str) -> Optional[pd.DataFrame]:
+    if is_readable_file(data_file):
+        if data_file.endswith(CSV_FORMAT):
+            df = pd.read_csv(data_file)
+        elif data_file.endswith(FEATHER_FORMAT):
+            df = pd.read_feather(data_file)
+    if df is not None:
+        df = df.set_index(keys=["ID"])
+    return df
+
+# Returns the data_file and the data_frame if the latest data_file
+# with the given base_name is found, is readable and is decodablea. 
+# Otherwise returns None
 def load_latest_data_frame(base_name: str) -> Optional[Tuple[str, pd.DataFrame]]:
-    csv_file = find_latest_file(f"/tmp/{base_name}-*.csv")
-    if is_readable_file(csv_file):
-        df = pd.read_csv(csv_file, index_col=False)
-        return (csv_file, df)
-    return None
-
+    data_file = find_latest_file(f"/tmp/{base_name}-*.*")
+    df = load_data_frame(data_file)
+    return (data_file, df) if df is not None else None
 
 # Return a DataFrame created as num_rows dicts with num_cols key-value pairs
 def generate_random_dataframe(num_rows: int=3, num_cols: int=3) -> pd.DataFrame:

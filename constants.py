@@ -41,15 +41,14 @@ ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME = "ellis_island_users_df"
 SEGMENT_METADATA = "SEGMENT.IDENTIFIES_METADATA"
 BATCH_SEGMENT_TABLE_METADATA = "batch_segment_table_metadata"
 
-USE_LATEST_KEY_COLUMN_INFOS_CSV_FILE = str2bool(os.getenv("USE_LATEST_KEY_COLUMN_INFOS_CSV_FILE"))
+CSV_FORMAT = "csv"
+FEATHER_FORMAT = "pf"
 
 ################################################
 # Tests
 ################################################
 
-def test_constants():
-    assert isinstance(USE_LATEST_KEY_COLUMN_INFOS_CSV_FILE, bool), f"ERROR type failure {type(USE_LATEST_KEY_COLUMN_INFOS_CSV_FILE)}"
-    
+def test_constants():    
     print("all tests passed in", os.path.basename(__file__))
 
 def tests():
