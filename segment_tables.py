@@ -97,7 +97,7 @@ def compute_segment_tables_df(conn: connector=None, verbose: bool=True) -> pd.Da
     return segment_tables_df
 
 # Returns the latest csv and df of a recomputed and auto-saved segment_tables
-def compute_and_save_new_segment_tables_df() -> Tuple[str, pd.DataFrame]:
+def compute_and_save_new_segment_tables_df(verbose: bool=True) -> Tuple[str, pd.DataFrame]:
     saved_df = compute_segment_tables_df()
     saved_csv_file = save_data_frame(SEGMENT_TABLES_DF_DEFAULT_BASE_NAME, saved_df)
     (latest_csv, latest_df) = get_segment_tables_df(load_latest=True)

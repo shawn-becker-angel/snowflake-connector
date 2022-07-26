@@ -25,7 +25,7 @@ save the segment_table and its dash-delimited list of columns in a dict
 
 ------------------------------------------------------------------------------------------------------------------------
 2. Identify and save the valid ellis island UUID as metadata for each segment_table's USER_ID field in SEGMENT.IDENTIFIES_METADATA
-    See batch_augmented_users.py  / compute_and_save_metadata_for_all_segment_users()
+    See batch_augmented_users.py  / compute_and_save_new_metadata_for_all_segment_users()
 
 2.a. Four named queries have been identified to find the ellis_island UUID for each segment_table's USER_ID
     1. rid_query 

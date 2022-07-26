@@ -249,7 +249,7 @@ def load_latest_segment_table_metadata_dict(segment_table_dict: Dict[str,str], c
 
     
 # Loads the latest saved set of segment_tables, computes and saves data_frames of metadata for each segment_table to disk
-def compute_and_save_metadata_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
+def compute_and_save_new_metadata_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
     _, segment_tables_df = get_segment_tables_df(load_latest=True, verbose=verbose)
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)
     total_segment_tables =  len(segment_table_dicts)
@@ -265,7 +265,7 @@ def compute_and_save_metadata_for_all_segment_tables(conn: connector=None, verbo
         save_segment_table_metadata_dict(segment_table_metadata_dict, verbose=verbose)
         
         if verbose:
-            show_segment_table_metadata_dict(segment_table_metadata_dict, caller=f"compute_and_save_metadata_for_all_segment_tables() ({cnt} out of {total_segment_tables})")
+            show_segment_table_metadata_dict(segment_table_metadata_dict, caller=f"compute_and_save_new_metadata_for_all_segment_tables() ({cnt} out of {total_segment_tables})")
             
         cnt += 1
 
@@ -294,8 +294,8 @@ def load_latest_metadata_for_all_segment_tables(conn: connector=None, verbose: b
 def test():
     conn = create_connector()
         
-    print("compute_and_save_metadata_for_all_segment_tables")
-    compute_and_save_metadata_for_all_segment_tables(conn=conn, verbose=True)
+    print("compute_and_save_new_metadata_for_all_segment_tables")
+    compute_and_save_new_metadata_for_all_segment_tables(conn=conn, verbose=True)
     
     print("load_latest_metadata_for_all_segment_tables")
     load_latest_metadata_for_all_segment_tables(conn=conn, verbose=True)
