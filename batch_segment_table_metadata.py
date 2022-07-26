@@ -261,7 +261,7 @@ def compute_and_save_new_metadata_for_all_segment_tables(conn: connector=None, v
         print(f"computing segment_table_metadata ({cnt} out of {total_segment_tables})")
         
         segment_table_metadata_dict = compute_segment_table_metadata_dict(segment_table_dict, conn=conn, verbose=verbose)
-        print(f"saving segment_table_metadat ({cnt} out of {total_segment_tables})")
+        print(f"saving segment_table_metadata ({cnt} out of {total_segment_tables})")
         save_segment_table_metadata_dict(segment_table_metadata_dict, verbose=verbose)
         
         if verbose:
