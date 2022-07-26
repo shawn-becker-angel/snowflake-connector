@@ -17,29 +17,34 @@ def get_data_frame_len(df: pd.DataFrame) -> int:
 
 # Saves the DataFrame (sets column ID as index column) 
 # to a new data_file with the given base_name, current timestamp and 
-# file format extension (CSV_FORMAT | FEATHER_FORMAT) and 
+# file format extension (CSV_FORMAT | PARQUET_FORMAT) and 
 # returns the name of the new data_file
 def save_data_frame(base_name: str, df: pd.DataFrame, format: str=CSV_FORMAT) -> str:
-    df = df.set_index(keys=["ID"])
     utc_now = datetime.datetime.utcnow().isoformat()
     data_file = f"/tmp/{base_name}-{utc_now}.{format}"
     if format == CSV_FORMAT:
+        if "ID" in df.columns:
+            df = df.set_index(keys=["ID"])
         df.to_csv(data_file) 
-    elif format == FEATHER_FORMAT: 
-        df.to_feather(data_file)
+    elif format == PARQUET_FORMAT: 
+        df = df.reset_index(level=None)
+        df.to_parquet(data_file)
     return data_file
 
-# Uses the data_file's file format extension (CSV_FORMAT | FEATHER_FORMAT)
-# to load the DataFrame (sets column ID as index column) or None if the given data_file
+# Uses the data_file's file format extension (CSV_FORMAT | PARQUET_FORMAT)
+# to load the DataFrame or None if the given data_file
 # is not found or is not readable
 def load_data_frame(data_file: str) -> Optional[pd.DataFrame]:
     if is_readable_file(data_file):
         if data_file.endswith(CSV_FORMAT):
             df = pd.read_csv(data_file)
-        elif data_file.endswith(FEATHER_FORMAT):
-            df = pd.read_feather(data_file)
+        elif data_file.endswith(PARQUET_FORMAT):
+            df = pd.read_parquet(data_file)
     if df is not None:
-        df = df.set_index(keys=["ID"])
+        if "ID" in df.columns:
+            df = df.set_index(keys=["ID"])
+    if df is not None and "Unnamed: 0" in df.columns:
+        df = df.drop(columns=['Unnamed: 0'])
     return df
 
 # Returns the data_file and the data_frame if the latest data_file

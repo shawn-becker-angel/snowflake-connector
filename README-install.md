@@ -24,15 +24,8 @@ verify your python version:
 `python --version`
 
 upgrade pip:  
-`python -m pip install --upgrade pip`
-
-verify that conda environment bin has been added to PATH:  
-`export PATH=$CONDA_PYTHON_PREFIX/bin:$PATH`
-
-add conda environment site-packages to PYTHONPATH:  
-`export PYTHONPATH=$CONDA_PREFIX/lib/python3.9/site-packages:$PYTHONPATH`
-
-## Install snowflake python connector
+`python -m pip install --upgrade pip`  
+## Install snowflake python connector  
 
 as instructed here:  
 [https://docs.snowflake.com/en/user-guide/python-connector.html]

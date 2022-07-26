@@ -83,6 +83,7 @@ def test_get_ellis_island_users_df():
 
 def tests():
     test_get_ellis_island_users_df()
+    print("all tests passed in", os.path.basename(__file__))
 
 def main(): 
     tests()

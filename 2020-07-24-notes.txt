@@ -39,8 +39,24 @@ two new columns {query_name}_UUID (nullable), and a {query_name}_TIMESTAMP (not 
 2.c. These columns are saved as new rows in SEGMENT.IDENTIFIES_METADATA.{segment_table}
 
 
+new columns for SEGMENT.ANGEL_MOBILE_ANDROID_PROD.IDENTIFIES x 15
+ID
+USER_ID
+ANONYMOUS_ID
+EMAIL
+[RID]
 
+TIMESTAMP
+RECEIVED_AT
+SENT_AT
+ORIGINAL_TIMESTAMP
+UUID_TS
 
+USER_ID_UUID
+USERNAME_UUID
+PERSONA_UUID
+[RID_UUID] <= priority
 
+VALID_UUID
 
  

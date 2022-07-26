@@ -42,7 +42,7 @@ SEGMENT_METADATA = "SEGMENT.IDENTIFIES_METADATA"
 BATCH_SEGMENT_TABLE_METADATA = "batch_segment_table_metadata"
 
 CSV_FORMAT = "csv"
-FEATHER_FORMAT = "pf"
+PARQUET_FORMAT = "pq"
 
 ################################################
 # Tests
