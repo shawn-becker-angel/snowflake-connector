@@ -15,7 +15,7 @@ def is_empty_data_frame(df: pd.DataFrame) -> bool:
 def get_data_frame_len(df: pd.DataFrame) -> int:
     return 0 if is_empty_data_frame(df) else len(df)
 
-# Saves the DataFrame (sets column ID as index column) 
+# Saves the data_frame (sets column ID as index column) 
 # to a new data_file with the given base_name, current timestamp and 
 # file format extension (CSV_FORMAT | PARQUET_FORMAT) and 
 # returns the name of the new data_file
@@ -32,7 +32,7 @@ def save_data_frame(base_name: str, df: pd.DataFrame, format: str=CSV_FORMAT) ->
     return data_file
 
 # Uses the data_file's file format extension (CSV_FORMAT | PARQUET_FORMAT)
-# to load the DataFrame or None if the given data_file
+# to load the data_frame or None if the given data_file
 # is not found or is not readable
 def load_data_frame(data_file: str) -> Optional[pd.DataFrame]:
     if is_readable_file(data_file):
@@ -55,7 +55,7 @@ def load_latest_data_frame(base_name: str) -> Optional[Tuple[str, pd.DataFrame]]
     df = load_data_frame(data_file)
     return (data_file, df) if df is not None else None
 
-# Return a DataFrame created as num_rows dicts with num_cols key-value pairs
+# Return a data_frame created as num_rows dicts with num_cols key-value pairs
 def generate_random_dataframe(num_rows: int=3, num_cols: int=3) -> pd.DataFrame:
     cols = []
     for i in range(num_cols):
