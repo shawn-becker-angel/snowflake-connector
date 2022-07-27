@@ -10,7 +10,7 @@ from query_generator import create_connector, query_batch_generator, execute_cou
 from utils import is_empty_list
 from data_frame_utils import is_empty_data_frame
 from ellis_island_users import get_ellis_island_users_df
-from segment_tables import get_segment_tables_df, get_segment_table_dicts
+from segment_tables import get_segment_table_dicts_df, get_segment_table_dicts
 from data_frame_utils import save_data_frame, get_data_frame_len, is_empty_data_frame, load_latest_data_frame
 
 AUGMENTED_SEGMENT_USERS_DF_DEFAULT_BASE_NAME = "augmented_segment_users_df"
@@ -124,8 +124,8 @@ def compute_and_save_augmented_segment_users_df_for_all_segment_tables(verbose: 
     (_, ellis_island_users_df) = get_ellis_island_users_df(conn=conn)
     
     if verbose:
-        print("get_segment_tables_df")
-    (_, segment_tables_df) = get_segment_tables_df(conn=conn, load_latest=True)
+        print("get_segment_table_dicts_df")
+    (_, segment_tables_df) = get_segment_table_dicts_df(conn=conn, load_latest=True)
     
     # converts 2-column dataframe to a list of 2-property dicts
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)

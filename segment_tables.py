@@ -4,17 +4,18 @@ import pandas as pd
 from requests import get
 from constants import *   
 from typing import Set, List, Dict, Optional, Tuple
+import snowflake.connector as connector
+from snowflake.connector import ProgrammingError
 from query_generator import query_batch_generator, create_connector, execute_batched_select_query, execute_single_query, execute_count_query, execute_simple_query
 from utils import matches_any, find_latest_file, is_readable_file
 from functools import cache
 import datetime
 from timefunc import timefunc
-import snowflake.connector as connector
-from snowflake.connector import ProgrammingError
 from segment_utils import get_segment_table_from_metadata_table, get_metadata_table_from_segment_table
 from pprint import pprint
 from data_frame_utils import save_data_frame, load_latest_data_frame, is_empty_data_frame
 from pandas.testing import assert_frame_equal
+from metadata_tables import find_existing_metadata_tables
 
 # Returns the set of all queryable segment_tables that have all key_columns as well as 
 # any optinal ALL_SEARCH_COLUMNS as a data_frame. 
@@ -136,17 +137,7 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
     segment_table_columns_df = execute_batched_select_query(select_query, select_columns, conn=conn, batch_size=100, timeout_seconds=5, verbose=verbose)
     return list(segment_table_columns_df.values)
 
-# Returns a list of metadata_tables that end with IDENTIFIES 
-# and already exist in SEGMENT.IDENTIFIES_METADATA
-def find_existing_metadata_tables(conn: connector=None, verbose:bool=True) -> List[str]:
-    existing_metadata_tables = []
-    show_tables_columns = ['created_on','name','database_name','schema_name	kind','comment','cluster_by	rows','bytes','owner','retention_time','automatic_clustering','change_tracking','search_optimization','search_optimization_progress','search_optimization_bytes','is_external']
-    show_tables_query = "show tables like '%IDENTIFIES' in SEGMENT.IDENTIFIES_METADATA"
-    results = execute_simple_query(show_tables_query, conn=conn)
-    for line in results:
-        line_dict = dict(zip(show_tables_columns, line))
-        existing_metadata_tables.append(f"{line_dict['name']}")
-    return existing_metadata_tables
+
 
 # Creates a clone in SEGMENT.IDENTIFIES_METADATAfor for each 
 # segment_table in SEGMENT described in segment_tables_df.

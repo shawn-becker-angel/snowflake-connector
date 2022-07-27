@@ -3,7 +3,7 @@ from constants import *
 import snowflake.connector as connector
 from query_generator import create_connector, execute_batched_select_query, clean_query
 import pandas as pd
-from segment_tables import get_segment_tables_df, get_segment_table_dicts
+from segment_tables import get_segment_table_dicts_df, get_segment_table_dicts
 from segment_utils import get_metadata_table_from_segment_table, get_uuid_column_from_segment_query_name
 from data_frame_utils import save_data_frame, load_latest_data_frame, load_data_frame
 import pprint
@@ -14,13 +14,15 @@ from utils import get_file_name_extension, find_latest_file
 
 # Given a segment_table_dict with the following structure:
 # {
-#     'segment_table': 'SEGMENT.ANGEL_APP_IOS.IDENTIFIES'
+#     'segment_table': 'SEGMENT.ANGEL_APP_IOS.IDENTIFIES',
+#     'metadata_table': 'SEGMENT__ANGEL_APP_IOS__IDENTIFIES',
 #     'columns': 'ID-RECEIVED_AT-USER_ID-SENT_AT-TIMESTAMP-EMAIL-ANONYMOUS_ID',
 # }
 #
 # Returns a segment_table_metadata_dict with the following structure:
 # { 
 #     "segment_table": <segment_table>,
+#     "metadata_table": <metadata_table>,
 #     "segment_queries": {
 #           "user_id_query": <query_metadata>,
 #           "username_query": <query_metadata>,
@@ -33,7 +35,6 @@ from utils import get_file_name_extension, find_latest_file
 # { "sql": <select_str>, "data_frame": <pd.DataFrame>, "data_file_name": <data_file_name> }
 # NOTE that "data_frame" is empty when serialized to "data_file_name" and vice verse.
 
-SEGMENT_QUERY_NAMES = ["user_id_query", "username_query", "persona_query", "rid_query"]
 SEGMENT_QUERY_BATCH_SIZE = 1000
 SEGMENT_QUERY_TIMEOUT_SECONDS = 60
 SEGMENT_QUERY_LIMIT_CLAUSE = ''
@@ -83,9 +84,11 @@ def show_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,Any],
 # see load_latest_segment_table_metadata_dict
 def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn: connector=None, verbose: bool=True) -> Dict[str,Any]:
     segment_table = segment_table_dict['segment_table']
-    segment_table_metadata = {}
-    segment_table_metadata["segment_table"] = segment_table
-    segment_table_metadata["segment_queries"] = {}
+    metadata_table = segment_table_dict['metadata_table']
+    segment_table_metadata_dict = {}
+    segment_table_metadata_dict['segment_table'] = segment_table
+    segment_table_metadata_dict['metadata_table'] = metadata_table
+    segment_table_metadata_dict["segment_queries"] = {}
 
     segment_table_columns = set(segment_table_dict['columns'].split("-"))
     segment_table_columns = list(segment_table_columns)
@@ -97,9 +100,6 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
     ellis_island_table = "STITCH_LANDING.ELLIS_ISLAND.USER"
     persona_users_table = "SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS"
     watchtime_table = "STITCH_LANDING.CHOSENHYDRA.WATCHTIME"
-
-    segment_table_metadata_dict = {}
-    segment_table_metadata_dict['segment_table'] = segment_table
 
     #------------------------------------------------------------
     query_metadata = {}
@@ -119,7 +119,7 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
         timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
         conn=conn, verbose=verbose)
     query_metadata["data_frame"] = df
-    segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
+    segment_table_metadata_dict["segment_queries"][segment_query_name] = query_metadata
 
     #------------------------------------------------------------
     query_metadata = {}
@@ -139,7 +139,7 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
         timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
         conn=conn, verbose=verbose)
     query_metadata["data_frame"] = df
-    segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
+    segment_table_metadata_dict["segment_queries"][segment_query_name] = query_metadata
 
     #------------------------------------------------------------
     query_metadata = {}
@@ -161,7 +161,7 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
         timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
         conn=conn, verbose=verbose)
     query_metadata["data_frame"] = df
-    segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
+    segment_table_metadata_dict["segment_queries"][segment_query_name] = query_metadata
 
     # if identifies_table has column 'RID'
     if "RID" in segment_table_columns:
@@ -185,9 +185,9 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
             timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
             conn=conn, verbose=verbose)
         query_metadata["data_frame"] = df
-        segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
+        segment_table_metadata_dict["segment_queries"][segment_query_name] = query_metadata
     
-    return segment_table_metadata
+    return segment_table_metadata_dict
 
 
 # Given a segment_table_metadata_dict, saves a timestamped json_metadata_file that includes 
@@ -257,7 +257,7 @@ def load_latest_segment_table_metadata_dict(segment_table_dict: Dict[str,str], c
     
 # Loads the latest saved set of segment_tables, computes and saves data_frames of metadata for each segment_table to disk
 def compute_and_save_new_metadata_dicts_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
-    _, segment_tables_df = get_segment_tables_df(load_latest=True, verbose=verbose)
+    _, segment_tables_df = get_segment_table_dicts_df(load_latest=True, verbose=verbose)
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)
     total_segment_tables =  len(segment_table_dicts)
     print("total_segment_tables:", total_segment_tables)
@@ -278,7 +278,7 @@ def compute_and_save_new_metadata_dicts_for_all_segment_tables(conn: connector=N
 
 # read the latest segment_table_metadata_dict file for each segment_table
 def load_latest_metadata_dicts_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
-    _, segment_tables_df = get_segment_tables_df(load_latest=True, verbose=verbose)
+    _, segment_tables_df = get_segment_table_dicts_df(load_latest=True, verbose=verbose)
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)
     total_segment_tables =  len(segment_table_dicts)
     print("total_segment_tables:", total_segment_tables)

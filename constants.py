@@ -37,6 +37,8 @@ SEGMENT_TABLE_DICTS_DF_DEFAULT_BASE_NAME = "segments_table_dicts_df"
 SEGMENT_METADATA = "SEGMENT.IDENTIFIES_METADATA"
 BATCH_SEGMENT_TABLE_METADATA = "batch_segment_table_metadata"
 
+SEGMENT_QUERY_NAMES = ["user_id_query", "username_query", "persona_query", "rid_query"]
+
 # used by data_frame_utils.py
 CSV_FORMAT = "csv"
 PARQUET_FORMAT = "parquet"
