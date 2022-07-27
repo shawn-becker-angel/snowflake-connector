@@ -30,8 +30,8 @@ ALL_SEARCH_COLUMNS_STR = "-".join(ALL_SEARCH_COLUMNS)
 SEARCH_SEGMENT_TABLES_SET = set(["IDENTIFIES"])
 SEARCH_IGNORE_SEGMENT_TABLES_SET = set(["DEV","STAGING","IDENTIFIES_METADATA"])
 
-SEGMENT_TABLES_DF_COLUMNS = ["segment_table","columns"]
-SEGMENT_TABLES_DF_DEFAULT_BASE_NAME = "segments_table_df"
+SEGMENT_TABLE_DICTS_DF_COLUMNS = ["segment_table","metadata_table","columns"]
+SEGMENT_TABLE_DICTS_DF_DEFAULT_BASE_NAME = "segments_table_dicts_df"
 
 # used by batch_segment_table_metadata.py
 SEGMENT_METADATA = "SEGMENT.IDENTIFIES_METADATA"

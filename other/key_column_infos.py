@@ -10,7 +10,7 @@ import datetime
 from timefunc import timefunc
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
-from segment_utils import get_info_schema_table_name_from_segment_table
+from segment_utils import get_metadata_table_from_segment_table
 
 KEY_COLUMN_COUNTS_MIN_TIMESTAMP = "'2022-01-01'"
 KEY_COLUMN_COUNTS_MAX_TIMESTAMP = "'2022-07-08'"
@@ -45,12 +45,12 @@ def get_key_column_info_query_info(segment_table, timestamp_column: Optional[str
 
 # Return a sorted list of all column_names in segment_table with TIMESTAMP datatypes
 def find_sorted_timestamp_columns(segment_table, conn: connector):
-    info_schema_table_name = get_info_schema_table_name_from_segment_table(segment_table)
+    metadata_table = get_metadata_table_from_segment_table(segment_table)
     timestamp_columns = []
     
     # NOTE that DATETIME is an alias for TIMESTAMP_NTZ
     # see https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#timestamp-ltz-timestamp-ntz-timestamp-tz
-    query = f"SELECT COLUMN_NAME FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = '{info_schema_table_name}' and DATA_TYPE = 'TIMESTAMP_NTZ'"
+    query = f"SELECT COLUMN_NAME FROM LOOKER_SOURCE.INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = '{metadata_table}' and DATA_TYPE = 'TIMESTAMP_NTZ'"
     query_batch_iterator = query_batch_generator(query, conn=conn)
     while True:
         try:

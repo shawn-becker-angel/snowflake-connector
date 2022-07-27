@@ -41,10 +41,12 @@ def load_data_frame(data_file: str) -> Optional[pd.DataFrame]:
         elif data_file.endswith(PARQUET_FORMAT):
             df = pd.read_parquet(data_file)
     if df is not None:
+        if "Unnamed: 0" in df.columns:
+            df = df.drop(columns=['Unnamed: 0'])
+        if "index" in df.columns:
+            df = df.drop(columns=['index'])
         if "ID" in df.columns:
             df = df.set_index(keys=["ID"])
-    if df is not None and "Unnamed: 0" in df.columns:
-        df = df.drop(columns=['Unnamed: 0'])
     return df
 
 # Returns the data_file and the data_frame if the latest data_file

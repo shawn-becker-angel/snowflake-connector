@@ -4,7 +4,7 @@ import snowflake.connector as connector
 from query_generator import create_connector, execute_batched_select_query, clean_query
 import pandas as pd
 from segment_tables import get_segment_tables_df, get_segment_table_dicts
-from segment_utils import get_info_schema_table_name_from_segment_table
+from segment_utils import get_metadata_table_from_segment_table, get_uuid_column_from_segment_query_name
 from data_frame_utils import save_data_frame, load_latest_data_frame, load_data_frame
 import pprint
 import json
@@ -38,51 +38,42 @@ SEGMENT_QUERY_BATCH_SIZE = 1000
 SEGMENT_QUERY_TIMEOUT_SECONDS = 60
 SEGMENT_QUERY_LIMIT_CLAUSE = ''
 
-# Remove and replace the data_frame for each query_name so the dict can be pprinted
+# Remove and replace the data_frame for each segment_query_name so the dict can be pprinted
 def show_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,Any], caller: str=None) -> None:
 
-    # temporarily save data_frame for each query_name
+    # temporarily save data_frame for each segment_query_name
     saved_data_frames = {}
-    for query_name in SEGMENT_QUERY_NAMES:
-        if query_name in segment_table_metadata_dict['segment_queries'].keys():
-            if "data_frame" in segment_table_metadata_dict['segment_queries'][query_name].keys():
-                df = segment_table_metadata_dict['segment_queries'][query_name]["data_frame"]
+    for segment_query_name in SEGMENT_QUERY_NAMES:
+        if segment_query_name in segment_table_metadata_dict['segment_queries'].keys():
+            if "data_frame" in segment_table_metadata_dict['segment_queries'][segment_query_name].keys():
+                df = segment_table_metadata_dict['segment_queries'][segment_query_name]["data_frame"]
                 if df is not None:
-                    uuid_name = f"{query_name}_uuid".upper().replace("_QUERY","")
+                    uuid_name = get_uuid_column_from_segment_query_name(segment_query_name)
                     if uuid_name in df.columns:
                         # add extra temporary shape and UUID info for show only
                         uuid_nans = df[uuid_name].isna().sum()
-                        segment_table_metadata_dict['segment_queries'][query_name]["shape"] = df.shape
-                        segment_table_metadata_dict['segment_queries'][query_name]["uuid_name"] = uuid_name
-                        segment_table_metadata_dict['segment_queries'][query_name]["uuid_nans"] = uuid_nans
-                    saved_data_frames[query_name] = df
-                    segment_table_metadata_dict['segment_queries'][query_name]["data_frame"] = None
+                        segment_table_metadata_dict['segment_queries'][segment_query_name]["shape"] = df.shape
+                        segment_table_metadata_dict['segment_queries'][segment_query_name]["uuid_name"] = uuid_name
+                        segment_table_metadata_dict['segment_queries'][segment_query_name]["uuid_nans"] = uuid_nans
+                    saved_data_frames[segment_query_name] = df
+                    segment_table_metadata_dict['segment_queries'][segment_query_name]["data_frame"] = None
     
     if caller is not None:
         print("show_segment_table_metadata_dict() called by", caller)
     pprint.pprint(segment_table_metadata_dict)
     
-    # restore data_frame for each query_name
-    for query_name in SEGMENT_QUERY_NAMES:
-        if query_name in segment_table_metadata_dict['segment_queries']:
-            if "data_frame" in segment_table_metadata_dict['segment_queries'][query_name].keys():
-                if query_name in saved_data_frames.keys():
-                    segment_table_metadata_dict['segment_queries'][query_name]["data_frame"] = saved_data_frames[query_name]
+    # restore data_frame for each segment_query_name
+    for segment_query_name in SEGMENT_QUERY_NAMES:
+        if segment_query_name in segment_table_metadata_dict['segment_queries']:
+            if "data_frame" in segment_table_metadata_dict['segment_queries'][segment_query_name].keys():
+                if segment_query_name in saved_data_frames.keys():
+                    segment_table_metadata_dict['segment_queries'][segment_query_name]["data_frame"] = saved_data_frames[segment_query_name]
                     # remove extra temporary shape and UUID info for show only
-                    segment_table_metadata_dict['segment_queries'][query_name].pop("shape")
-                    segment_table_metadata_dict['segment_queries'][query_name].pop("uuid_name")
-                    segment_table_metadata_dict['segment_queries'][query_name].pop("uuid_nans")
+                    segment_table_metadata_dict['segment_queries'][segment_query_name].pop("shape")
+                    segment_table_metadata_dict['segment_queries'][segment_query_name].pop("uuid_name")
+                    segment_table_metadata_dict['segment_queries'][segment_query_name].pop("uuid_nans")
 
-# WIP
-# Execute sql queries that populate the 4 UUID columns in the 
-# info_schema_table_name table under SEGMENT.IDENTIFIES_METADATA
-# of the given segment_table_dict
-# def execute_uuid_queries(segment_table_dict: Dict[str,str], conn: connector=None, verbose: bool=True) -> Dict[str,Any]:
-#     create cloned_table in SEGMENT.IDENTIFIES_METADATA if needed
-#     for each segment_query
-#         add uuid column default null to clone_table if needed
-#         run query to update uuid column
-#     return stats
+
 
 # Executes the sql queries that compute up to 4 possible UUID values for the user_id in each row in 
 # the given segment_table. The results of these queries are saved in memory as data_frames, which are 
@@ -112,7 +103,7 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
 
     #------------------------------------------------------------
     query_metadata = {}
-    query_name = "user_id_query"
+    segment_query_name = "user_id_query"
     query = f"\
         select distinct {select_clause}, ei.uuid as user_id_uuid\
         from {identifies_table} id\
@@ -128,11 +119,11 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
         timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
         conn=conn, verbose=verbose)
     query_metadata["data_frame"] = df
-    segment_table_metadata["segment_queries"][query_name] = query_metadata
+    segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
 
     #------------------------------------------------------------
     query_metadata = {}
-    query_name = "username_query"
+    segment_query_name = "username_query"
     query = f"\
         select distinct {select_clause}, ei.uuid as username_uuid\
         from {identifies_table} id\
@@ -148,11 +139,11 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
         timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
         conn=conn, verbose=verbose)
     query_metadata["data_frame"] = df
-    segment_table_metadata["segment_queries"][query_name] = query_metadata
+    segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
 
     #------------------------------------------------------------
     query_metadata = {}
-    query_name = "persona_query"
+    segment_query_name = "persona_query"
     query = f"\
         select distinct {select_clause}, ei.uuid as persona_uuid\
         from {identifies_table} id\
@@ -170,13 +161,13 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
         timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
         conn=conn, verbose=verbose)
     query_metadata["data_frame"] = df
-    segment_table_metadata["segment_queries"][query_name] = query_metadata
+    segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
 
     # if identifies_table has column 'RID'
     if "RID" in segment_table_columns:
         #------------------------------------------------------------
         query_metadata = {}
-        query_name = "rid_query"
+        segment_query_name = "rid_query"
         query = f"\
          select distinct {select_clause}, ei.uuid as rid_uuid\
             from {identifies_table} id\
@@ -194,7 +185,7 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
             timeout_seconds=SEGMENT_QUERY_TIMEOUT_SECONDS, 
             conn=conn, verbose=verbose)
         query_metadata["data_frame"] = df
-        segment_table_metadata["segment_queries"][query_name] = query_metadata
+        segment_table_metadata["segment_queries"][segment_query_name] = query_metadata
     
     return segment_table_metadata
 
@@ -204,19 +195,19 @@ def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn:
 # that has been saved to local disk
 def save_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,Any], verbose: bool=True) -> None:
     segment_table = segment_table_metadata_dict['segment_table']
-    info_schema_table_name = get_info_schema_table_name_from_segment_table(segment_table)
-    metadata_table = f"{SEGMENT_METADATA}.{info_schema_table_name}"
+    metadata_table = get_metadata_table_from_segment_table(segment_table)
+    metadata_table = f"{SEGMENT_METADATA}.{metadata_table}"
 
-    # save the data_frame to a data_file_name for each query_name
+    # save the data_frame to a data_file_name for each segment_query_name
     # save data_frame for later restore
     # clear the data_frame propery before pprint
     
     saved_data_frames = {}
-    for query_name in SEGMENT_QUERY_NAMES:
-        if query_name in segment_table_metadata_dict['segment_queries']:
-            query_metadata = segment_table_metadata_dict['segment_queries'][query_name]
-            data_file_base_name = f"{BATCH_SEGMENT_TABLE_METADATA}_{metadata_table}_{query_name}_df"
-            saved_data_frames[query_name] = df = query_metadata["data_frame"]
+    for segment_query_name in SEGMENT_QUERY_NAMES:
+        if segment_query_name in segment_table_metadata_dict['segment_queries']:
+            query_metadata = segment_table_metadata_dict['segment_queries'][segment_query_name]
+            data_file_base_name = f"{BATCH_SEGMENT_TABLE_METADATA}_{metadata_table}_{segment_query_name}_df"
+            saved_data_frames[segment_query_name] = df = query_metadata["data_frame"]
             data_file_name = save_data_frame(data_file_base_name, df, format=PARQUET_FORMAT)
             query_metadata["data_file_name"] = data_file_name
             query_metadata["data_frame"] = None
@@ -228,12 +219,12 @@ def save_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,Any],
     with open(segment_table_metadata_dict_json_file_name, 'w') as f:
         json.dump(segment_table_metadata_dict, f)
     
-    # restore data_frame property for each query_name after the pprint
+    # restore data_frame property for each segment_query_name after the pprint
     
-    for query_name in SEGMENT_QUERY_NAMES:
-        if query_name in segment_table_metadata_dict['segment_queries']:
-            query_metadata = segment_table_metadata_dict['segment_queries'][query_name]
-            query_metadata["data_frame"] = saved_data_frames[query_name]
+    for segment_query_name in SEGMENT_QUERY_NAMES:
+        if segment_query_name in segment_table_metadata_dict['segment_queries']:
+            query_metadata = segment_table_metadata_dict['segment_queries'][segment_query_name]
+            query_metadata["data_frame"] = saved_data_frames[segment_query_name]
 
 # Given a segment_table_metadata_dict, loads the latest segment_table_metadata_dict json files for the given segment_table_dict.
 # The segment_table_metadata_dict contains the data_file_name, from which each data_frame can be loaded 
@@ -241,8 +232,8 @@ def load_latest_segment_table_metadata_dict(segment_table_dict: Dict[str,str], c
 
     segment_table_metadata_dict = None
     segment_table = segment_table_dict['segment_table']
-    info_schema_table_name = get_info_schema_table_name_from_segment_table(segment_table)
-    metadata_table = f"{SEGMENT_METADATA}.{info_schema_table_name}"
+    metadata_table = get_metadata_table_from_segment_table(segment_table)
+    metadata_table = f"{SEGMENT_METADATA}.{metadata_table}"
     
     # attempt to load the segment_table_metadata_dict from a local json file
 
@@ -254,10 +245,10 @@ def load_latest_segment_table_metadata_dict(segment_table_dict: Dict[str,str], c
         with open(segment_table_metadata_dict_json_file_name, 'r') as f:
             segment_table_metadata_dict = json.load(f)
 
-        # deserialize the data_frame for each query_name
-        for query_name in SEGMENT_QUERY_NAMES:
-            if query_name in segment_table_metadata_dict["segment_queries"]:
-                query_metadata = segment_table_metadata_dict["segment_queries"][query_name]
+        # deserialize the data_frame for each segment_query_name
+        for segment_query_name in SEGMENT_QUERY_NAMES:
+            if segment_query_name in segment_table_metadata_dict["segment_queries"]:
+                query_metadata = segment_table_metadata_dict["segment_queries"][segment_query_name]
                 data_file_name = query_metadata["data_file_name"]
                 df = query_metadata["data_frame"] = load_data_frame(data_file_name)
         
