@@ -144,15 +144,24 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
     segment_table_columns_df = execute_batched_select_query(select_query, select_columns, conn=conn, batch_size=100, timeout_seconds=5, verbose=verbose)
     return list(segment_table_columns_df.values)
 
-def clone_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=True, preview_only: bool=True) -> List[str]:
+# Returns a list of info_schema_table_names that end with IDENTIFIES 
+# and already exist in SEGMENT.IDENTIFIES_METADATA
+def find_existing_info_schema_table_names(conn: connector=None, verbose:bool=True) -> List[str]:
+    existing_info_schema_table_names = []
     show_tables_columns = ['created_on','name','database_name','schema_name	kind','comment','cluster_by	rows','bytes','owner','retention_time','automatic_clustering','change_tracking','search_optimization','search_optimization_progress','search_optimization_bytes','is_external']
     show_tables_query = "show tables like '%IDENTIFIES' in SEGMENT.IDENTIFIES_METADATA"
-    results = execute_simple_query(show_tables_query)
-    existing_info_schema_table_names = []
+    results = execute_simple_query(show_tables_query, conn=conn)
     for line in results:
         line_dict = dict(zip(show_tables_columns, line))
         existing_info_schema_table_names.append(f"{line_dict['name']}")
-    
+    return existing_info_schema_table_names
+
+# Creates a clone in SEGMENT.IDENTIFIES_METADATAfor for each 
+# segment_table in SEGMENT described in segment_tables_df.
+# Returns a list of the info_schema_table_names in SEGMENT.IDENTIFIES_METADATA 
+# that have been newly cloned from source segment_tables in SEGMENT
+def clone_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=True, preview_only: bool=True) -> List[str]:
+    existing_info_schema_table_names = find_existing_info_schema_table_names(conn=conn)
     newly_cloned_tables = []
     for row in segment_tables_df.values:
         segment_table = row[0]
@@ -179,14 +188,30 @@ def clone_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=T
         print("newly_cloned_tables:\n", newly_cloned_tables)
     return newly_cloned_tables
 
+# Returns a list of segment_tables that have not been
+# cloned into SEGMENT.IDENTIFIES_METADATA from SEGMENT
+def find_uncloned_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=True) -> List[str]:
+    existing_info_schema_table_names = find_existing_info_schema_table_names(conn=conn)
+    required_segment_tables = [row[0] for row in segment_tables_df.values]
+    required_info_schema_table_names = [get_info_schema_table_name_from_segment_table(x) for x in required_segment_tables ]
+    uncloned_info_schema_table_names = list(set(required_info_schema_table_names) - set(existing_info_schema_table_names))
+    uncloned_segment_tables = [get_segment_table_from_info_schema_table_name(x) for x in uncloned_info_schema_table_names]
+    return uncloned_segment_tables
 
 ################################################
 # Tests
 ################################################
 
-def test_clone_latest_segment_tables_df():
+def test_clone_latest_segment_tables():
     [csv_file,latest_df] = get_segment_tables_df(load_latest=True)
     clone_segment_tables(latest_df, preview_only=False)
+
+def test_find_uncloned_segment_tables():
+    [csv_file,latest_df] = get_segment_tables_df(load_latest=True)
+    uncloned_segment_tables = find_uncloned_segment_tables(latest_df)
+    print(f"uncloned_segment_tables: {len(uncloned_segment_tables)}")
+    for segment_table in uncloned_segment_tables:
+        print(f"  uncloned segment_table: {segment_table}")
 
 def test_compute_and_save_new_segment_tables_df():
     csv, df = compute_and_save_new_segment_tables_df()
@@ -213,8 +238,8 @@ def test_find_segment_table_columns():
 def tests():
     test_compute_and_save_new_segment_tables_df()
     test_find_segment_table_columns()
-    # test_clone_latest_segment_tables_df()
-
+    test_clone_latest_segment_tables()
+    test_find_uncloned_segment_tables()
     
     print()
     print("all tests passed in", os.path.basename(__file__))

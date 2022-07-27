@@ -50,8 +50,8 @@ def show_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,Any],
                 if df is not None:
                     uuid_name = f"{query_name}_uuid".upper().replace("_QUERY","")
                     if uuid_name in df.columns:
+                        # add extra temporary shape and UUID info for show only
                         uuid_nans = df[uuid_name].isna().sum()
-                        segment_table_metadata_dict['segment_queries'][query_name]["data_frame"] = None
                         segment_table_metadata_dict['segment_queries'][query_name]["shape"] = df.shape
                         segment_table_metadata_dict['segment_queries'][query_name]["uuid_name"] = uuid_name
                         segment_table_metadata_dict['segment_queries'][query_name]["uuid_nans"] = uuid_nans
@@ -68,13 +68,29 @@ def show_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,Any],
             if "data_frame" in segment_table_metadata_dict['segment_queries'][query_name].keys():
                 if query_name in saved_data_frames.keys():
                     segment_table_metadata_dict['segment_queries'][query_name]["data_frame"] = saved_data_frames[query_name]
+                    # remove extra temporary shape and UUID info for show only
                     segment_table_metadata_dict['segment_queries'][query_name].pop("shape")
                     segment_table_metadata_dict['segment_queries'][query_name].pop("uuid_name")
                     segment_table_metadata_dict['segment_queries'][query_name].pop("uuid_nans")
 
+# WIP
+# Execute sql queries that populate the 4 UUID columns in the 
+# info_schema_table_name table under SEGMENT.IDENTIFIES_METADATA
+# of the given segment_table_dict
+# def execute_uuid_queries(segment_table_dict: Dict[str,str], conn: connector=None, verbose: bool=True) -> Dict[str,Any]:
+#     create cloned_table in SEGMENT.IDENTIFIES_METADATA if needed
+#     for each segment_query
+#         add uuid column default null to clone_table if needed
+#         run query to update uuid column
+#     return stats
 
+# Executes the sql queries that compute up to 4 possible UUID values for the user_id in each row in 
+# the given segment_table. The results of these queries are saved in memory as data_frames, which are 
+# referenced in the returned segment_table_metadata_dict.
+# Related:
+# see save_segment_table_metadata_dict
+# see load_latest_segment_table_metadata_dict
 def compute_segment_table_metadata_dict(segment_table_dict: Dict[str,str], conn: connector=None, verbose: bool=True) -> Dict[str,Any]:
-
     segment_table = segment_table_dict['segment_table']
     segment_table_metadata = {}
     segment_table_metadata["segment_table"] = segment_table
@@ -249,7 +265,7 @@ def load_latest_segment_table_metadata_dict(segment_table_dict: Dict[str,str], c
 
     
 # Loads the latest saved set of segment_tables, computes and saves data_frames of metadata for each segment_table to disk
-def compute_and_save_new_metadata_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
+def compute_and_save_new_metadata_dicts_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
     _, segment_tables_df = get_segment_tables_df(load_latest=True, verbose=verbose)
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)
     total_segment_tables =  len(segment_table_dicts)
@@ -270,7 +286,7 @@ def compute_and_save_new_metadata_for_all_segment_tables(conn: connector=None, v
         cnt += 1
 
 # read the latest segment_table_metadata_dict file for each segment_table
-def load_latest_metadata_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
+def load_latest_metadata_dicts_for_all_segment_tables(conn: connector=None, verbose: bool=True) -> None:
     _, segment_tables_df = get_segment_tables_df(load_latest=True, verbose=verbose)
     segment_table_dicts = get_segment_table_dicts(segment_tables_df)
     total_segment_tables =  len(segment_table_dicts)
@@ -294,11 +310,11 @@ def load_latest_metadata_for_all_segment_tables(conn: connector=None, verbose: b
 def test():
     conn = create_connector()
         
-    print("compute_and_save_new_metadata_for_all_segment_tables")
-    compute_and_save_new_metadata_for_all_segment_tables(conn=conn, verbose=True)
+    print("compute_and_save_new_metadata_dicts_for_all_segment_tables")
+    compute_and_save_new_metadata_dicts_for_all_segment_tables(conn=conn, verbose=True)
     
     print("load_latest_metadata_for_all_segment_tables")
-    load_latest_metadata_for_all_segment_tables(conn=conn, verbose=True)
+    load_latest_metadata_dicts_for_all_segment_tables(conn=conn, verbose=True)
 
     print("all tests passed in", os.path.basename(__file__))
 

@@ -2,7 +2,7 @@ from constants import *
 from timefunc import timefunc
 from query_generator import create_connector
 from segment_tables import compute_and_save_new_segment_tables_df
-from batch_segment_table_metadata import compute_and_save_new_metadata_for_all_segment_tables
+from batch_segment_table_metadata import compute_and_save_new_metadata_dicts_for_all_segment_tables
 
 @timefunc
 def main():
@@ -16,7 +16,7 @@ def main():
     print("num segment_tables:", len(segment_tables_df), "in:", csv_file)
         
     print("compute_and_save_new_metadata_for_all_segment_tables")
-    compute_and_save_new_metadata_for_all_segment_tables(verbose=True, conn=conn)
+    compute_and_save_new_metadata_dicts_for_all_segment_tables(verbose=True, conn=conn)
 
 if __name__ == "__main__":
     
