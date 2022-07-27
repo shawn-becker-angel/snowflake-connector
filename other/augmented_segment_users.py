@@ -13,6 +13,7 @@ from ellis_island_users import get_ellis_island_users_df
 from segment_tables import get_segment_tables_df, get_segment_table_dicts
 from data_frame_utils import save_data_frame, get_data_frame_len, is_empty_data_frame, load_latest_data_frame
 
+AUGMENTED_SEGMENT_USERS_DF_DEFAULT_BASE_NAME = "augmented_segment_users_df"
 
 # Augments segment_users of one segment_table_dict by adding a vetted ellis_island_user UUID.
 # This function Iteratively runs left outer joins of small batches of segment users of

@@ -16,9 +16,9 @@ PORT = os.getenv("PORT")
 WAREHOUSE = os.getenv("WAREHOUSE")
 DATABASE = os.getenv("DATABASE")
 SCHEMA = os.getenv("SCHEMA")
+
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("DEFAULT_TIMEOUT_SECONDS"))
 DEFAULT_BATCH_SIZE = int(os.getenv("DEFAULT_BATCH_SIZE"))
-
 
 # segment_table and columns_set constants
 ALL_KEY_COLUMNS = set(["ID","ANONYMOUS_ID", "USER_ID", "EMAIL"])
@@ -33,14 +33,11 @@ SEARCH_IGNORE_SEGMENT_TABLES_SET = set(["DEV","STAGING","IDENTIFIES_METADATA"])
 SEGMENT_TABLES_DF_COLUMNS = ["segment_table","columns"]
 SEGMENT_TABLES_DF_DEFAULT_BASE_NAME = "segments_table_df"
 
-AUGMENTED_SEGMENT_USERS_DF_DEFAULT_BASE_NAME = "augmented_segment_users_df"
-
-ELLIS_ISLAND_USERS_DF_COLUMNS = ["USER_UUID","USER_USERNAME", "USER_EMAIL"]
-ELLIS_ISLAND_USERS_DF_DEFAULT_BASE_NAME = "ellis_island_users_df"
-
+# used by batch_segment_table_metadata.py
 SEGMENT_METADATA = "SEGMENT.IDENTIFIES_METADATA"
 BATCH_SEGMENT_TABLE_METADATA = "batch_segment_table_metadata"
 
+# used by data_frame_utils.py
 CSV_FORMAT = "csv"
 PARQUET_FORMAT = "parquet"
 
