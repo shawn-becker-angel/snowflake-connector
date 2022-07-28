@@ -1,12 +1,11 @@
 
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
-from query_generator import create_connector, clean_query, execute_batched_select_query, execute_simple_query, execute_single_query, execute_count_query
+from query_generator import create_connector, clean_query, execute_simple_query, execute_single_query, execute_count_query
 from constants import *   
 from typing import Set, List, Dict, Optional, Tuple
 from segment_utils import get_metadata_table_from_segment_table
 from segment_tables import get_segment_table_dicts_df, get_segment_table_dicts
-import pprint
 
 # Given a segment_table_dict with the following example structure:
 # {
@@ -167,11 +166,6 @@ class MetadataTable():
         for query_dict in self.query_dicts:
             self.run_query_dict(query_dict, conn=conn, verbose=verbose, preview_only=preview_only)
             
-    def show_query_dicts(self):
-        for query_dict in self.query_dicts:
-            print("\nshow_query_dict:")
-            pprint.pprint(query_dict)
-
 # Returns True if metadata_table exists under SEGMENT.IDENTIFIES_METADATA
 def metadata_table_exists(metadata_table: str, conn: connector=None, verbose:bool=True):
     existing_metadata_tables = find_existing_metadata_tables(conn=conn, verbose=verbose)
@@ -249,7 +243,6 @@ def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, pre
         metadata_table_obj = MetadataTable(segment_table_dict)
         metadata_table_obj.clone_metadata_table(conn=conn, verbose=verbose, preview_only=preview_only)
         metadata_table_obj.add_query_dicts()
-        metadata_table_obj.show_query_dicts()
         metadata_table_obj.run_query_dicts(conn=conn, verbose=verbose, preview_only=preview_only)
 
 ################################################
@@ -262,10 +255,7 @@ def tests():
 def main():
     conn = create_connector()
     create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=True)
-    print()
-
-    
-    
+    print("done")
     
 if __name__ == "__main__":
     main()
