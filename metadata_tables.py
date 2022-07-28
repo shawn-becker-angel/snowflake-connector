@@ -1,11 +1,12 @@
 
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
-from query_generator import clean_query, execute_simple_query, execute_single_query, execute_count_query
+from query_generator import create_connector, clean_query, execute_batched_select_query, execute_simple_query, execute_single_query, execute_count_query
 from constants import *   
-from typing import Set, List, Dict
+from typing import Set, List, Dict, Optional, Tuple
 from segment_utils import get_metadata_table_from_segment_table
-from segment_tables import get_segment_table_dicts_df
+from segment_tables import get_segment_table_dicts_df, get_segment_table_dicts
+import pprint
 
 # Given a segment_table_dict with the following example structure:
 # {
@@ -32,80 +33,148 @@ from segment_tables import get_segment_table_dicts_df
 #   columns: List[str]
 class MetadataTable():
     def __init__(self, segment_table_dict: Dict[str,str]):
-        
-        self.identifies_metadata_table = f"SEGMENT.IDENTIFIES_METADATA.{segment_table_dict['metadata_table']}"
+        self.segment_table_dict = segment_table_dict
+        self.metadata_table = segment_table_dict['metadata_table']
+        self.identifies_metadata_table = f"SEGMENT.IDENTIFIES_METADATA.{self.metadata_table}"
         self.segment_table_columns = list(set(segment_table_dict['columns'].split("-")))
         self.select_clause = ', '.join([f"id.{x}" for x in self.segment_table_columns])
         self.not_null_clause = " and ".join([f"id.{x} is not NULL" for x in self.segment_table_columns])
-        self.limit_clause = SEGMENT_QUERY_LIMIT_CLAUSE
         self.ellis_island_table = "STITCH_LANDING.ELLIS_ISLAND.USER"
         self.persona_users_table = "SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS"
         self.watchtime_table = "STITCH_LANDING.CHOSENHYDRA.WATCHTIME"
         self.query_dicts = []
-        
-    def create_query_dict(self, query_name, new_uuid, query):
+
+    # Return True if the metadata_table was actually cloned
+    # otherwise return False if metadata_table already exists
+    # or clone failed.
+    def clone_metadata_table(self, conn: connector=None, verbose: bool=True, preview_only: bool=True) -> bool:
+        if not metadata_table_exists(self.metadata_table, conn=conn, verbose=verbose):
+            return clone_metadata_table(self.segment_table_dict, conn=conn, verbose=verbose, preview_only=preview_only)
+        else:
+            return False       
+    
+    # Executes a set_uuid_query after adding the new uuid column if needed
+    # Returns True if the query was successfully run
+    # otherwise return False
+    def run_query_dict(self, query_dict, conn: connector=None, verbose: bool=True, preview_only: bool=True) -> bool:
+        if not metadata_table_exists(self.metadata_table, conn=conn, verbose=verbose):
+            return False
+
+        # add new_uuid column if needed
+        new_uuid = query_dict['new_uuid']
+        if new_uuid not in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose):
+            add_uuid_column_query = f"\
+                ALTER TABLE {self.identifies_metadata_table} \
+                ADD COLUMN {query_dict['new_uuid']} VARCHAR \
+                DEFAULT NULL"
+            if preview_only:
+                print(add_uuid_column_query)
+            else:
+                execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
+                assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
+
+        # set the new_uuid column value for each row
+        if preview_only:
+            print(query_dict['set_uuid_query'])
+            return False
+        else:
+            execute_single_query(query_dict['set_uuid_query'], conn=conn, verbose=verbose)
+            return True
+
+    # Returns a dict that packages a set_uuid_query
+    def create_query_dict(self, query_name, new_uuid, set_uuid_query):
         query_dict = {}
         query_dict["name"] = query_name
         assert query_name in SEGMENT_QUERY_NAMES, f"ERROR: invalid query_name: {query_name}"
         query_dict["new_uuid"] = new_uuid
-        query_dict["query"] = clean_query(query)
+        query_dict["set_uuid_query"] = clean_query(set_uuid_query)
         query_dict["columns"] = [*self.segment_table_columns, new_uuid.upper()]
         return query_dict
     
+    # Adds all set_uuid queries
     def add_query_dicts(self):
         #---------------------------------------
         query_name = "user_id_query"
         new_uuid = "user_id_uuid"
-        query = f"\
-            select distinct {self.select_clause}, ei.uuid as {new_uuid}\
-            from {self.identifies_metadata_table} id\
-            left join {self.ellis_island_table} ei\
-                on id.user_id = ei.uuid\
-            where {self.not_null_clause} {self.limit_clause}"
-        user_id_query_dict = self.create_query_dict(query_name, new_uuid, query)
+        set_uuid_query = f"\
+            WITH W AS (\
+                SELECT {self.select_clause}, ei.uuid AS user_id_uuid\
+                FROM {self.identifies_metadata_table} id\
+                LEFT JOIN {self.ellis_island_table} ei\
+                    ON id.user_id = ei.uuid\
+                WHERE {self.not_null_clause}\
+            ) UPDATE {self.identifies_metadata_table} id\
+                SET id.user_id_uuid = W.user_id_uuid"
+
+        user_id_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
         self.query_dicts.append(user_id_query_dict)
         
         #----------------------------------------  
         query_name = "username_query"
-        new_uuid = "usename_uuid"
-        query = f"\
-            select distinct {self.select_clause}, ei.uuid as username_uuid\
-            from {self.identifies_metadata_table} id\
-            left join {self.ellis_island_table} ei\
-                on id.email = ei.username\
-            where {self.not_null_clause} {self.limit_clause}"
-        username_query_dict = self.create_query_dict(query_name, new_uuid, query)
+        new_uuid = "username_uuid"
+        set_uuid_query = f"\
+            WITH W AS (\
+                SELECT {self.select_clause}, ei.uuid AS username_uuid\
+                FROM {self.identifies_metadata_table} id\
+                LEFT JOIN {self.ellis_island_table} ei\
+                    ON id.email = ei.username\
+                WHERE {self.not_null_clause}\
+            ) UPDATE {self.identifies_metadata_table} id\
+                SET id.username_uuid = W.username_uuid"
+                
+        username_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
         self.query_dicts.append(username_query_dict)
     
         #----------------------------------------  
         query_name = "persona_query"
         new_uuid = "persona_uuid"
-        query = f"\
-            select distinct {self.select_clause}, ei.uuid as persona_uuid\
-            from {self.identifies_metadata_table} id\
-            join {self.persona_users_table} pu\
-                on id.user_id = pu.id  \
-            left join {self.ellis_island_table} ei\
-                on pu.id = ei.uuid\
-            where {self.not_null_clause} {self.limit_clause}"
-        persona_query_dict = self.create_query_dict(query_name, new_uuid, query)
+        set_uuid_query = f"\
+            WITH W AS (\
+                SELECT {self.select_clause}, ei.uuid AS persona_uuid\
+                FROM {self.identifies_metadata_table} id\
+                JOIN {self.persona_users_table} pu\
+                    ON id.user_id = pu.id  \
+                LEFT JOIN {self.ellis_island_table} ei\
+                    ON pu.id = ei.uuid\
+                WHERE {self.not_null_clause}\
+            ) UPDATE {self.identifies_metadata_table} id\
+                SET id.persona_uuid = W.persona_uuid"
+        
+        persona_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
         self.query_dicts.append(persona_query_dict)
 
         #----------------------------------------  
         if "RID" in self.segment_table_columns:
             query_name = "rid_query"
             new_uuid = "rid_uuid"
-            query = f"\
-                select distinct {self.select_clause}, ei.uuid as rid_uuid\
-                    from {self.identifies_metadata_table} id\
-                    join {self.watchtime_table} wt\
-                        on id.rid = wt.rid\
-                    left join {self.ellis_island_table} ei\
-                        on wt.user_id = ei.uuid\
-                    where {self.not_null_clause} and id.rid is not NULL {self.limit_clause}"
-            rid_query_dict = self.create_query_dict(query_name, new_uuid, query)
+            set_uuid_query = f"\
+                WITH W AS (\
+                    SELECT {self.select_clause}, ei.uuid AS rid_uuid\
+                    FROM {self.identifies_metadata_table} id\
+                    JOIN {self.watchtime_table} wt\
+                        ON id.rid = wt.rid\
+                    LEFT JOIN {self.ellis_island_table} ei\
+                        ON wt.user_id = ei.uuid\
+                    WHERE {self.not_null_clause}\
+                ) UPDATE {self.identifies_metadata_table} id\
+                    SET id.rid_uuid = W.rid_uuid"
+            
+            rid_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
             self.query_dicts.append(rid_query_dict)
+    
+    def run_query_dicts(self, conn: connector=None, verbose: bool=True, preview_only: bool=True):
+        for query_dict in self.query_dicts:
+            self.run_query_dict(query_dict, conn=conn, verbose=verbose, preview_only=preview_only)
+            
+    def show_query_dicts(self):
+        for query_dict in self.query_dicts:
+            pprint.pprint(query_dict)
 
+# Returns True if metadata_table exists under SEGMENT.IDENTIFIES_METADATA
+def metadata_table_exists(metadata_table: str, conn: connector=None, verbose:bool=True):
+    existing_metadata_tables = find_existing_metadata_tables(conn=conn, verbose=verbose)
+    return True if metadata_table in existing_metadata_tables else False
+    
 # Returns a list of metadata_tables that end with IDENTIFIES 
 # and already exist in SEGMENT.IDENTIFIES_METADATA
 def find_existing_metadata_tables(conn: connector=None, verbose:bool=True) -> List[str]:
@@ -135,71 +204,66 @@ def describe_metadata_table(metadata_table: str, conn: connector=None, verbose: 
         print(f"{type(err)} str(err)")
     return table_info_dicts
 
-# Creates a clone in SEGMENT.IDENTIFIES_METADATA for for each 
-# segment_table in SEGMENT described in segment_tables_df.
-# Returns a list of the metadata_tables in SEGMENT.IDENTIFIES_METADATA 
-# that have been newly cloned from source segment_tables in SEGMENT
-def clone_metadata_tables(segment_tables_df, conn: connector=None, verbose:bool=True, preview_only: bool=True) -> List[str]:
-    existing_metadata_tables = find_existing_metadata_tables(conn=conn)
-    newly_cloned_tables = []
-    for row in segment_tables_df.values:
-        segment_table = row[0]
-        metadata_table = get_metadata_table_from_segment_table(segment_table)
-        if metadata_table not in existing_metadata_tables:
-            cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
-            clone_query = f"create table if not exists {cloned_table} clone {segment_table}"
-            if verbose:
-                print(clone_query)
-            if not preview_only:
-                try:
-                    source_count = execute_count_query(f"select count(*) from {segment_table}")
-                    if verbose:
-                        print(f"source_count:{source_count}")
-                    execute_single_query(clone_query, conn=conn, verbose=verbose)
-                    cloned_count = execute_count_query(f"select count(*) from {cloned_table}")
-                    if verbose:
-                            print(f"cloned_count:{cloned_count}")
-                    assert cloned_count == source_count, f"ERROR: expected cloned_count:{source_count} but got {cloned_count}"
-                    newly_cloned_tables.append(metadata_table)
-                except Exception as e:
-                    print(f"{type(e)} {str(e)}")
-    if verbose:
-        print("newly_cloned_tables:\n", newly_cloned_tables)
-    return newly_cloned_tables
+# Returns a list of metadata_table columns derived from DESCRIBE TABLE or None if metadata_table not found
+def get_existing_metadata_table_columns(metadata_table: str, conn: connector=None, verbose: bool=True) -> Optional[List[str]]:
+    table_info_dicts = describe_metadata_table(metadata_table, conn=conn, verbose=verbose)
+    if table_info_dicts is not None:
+        return [table_info_dict['name'] for table_info_dict in table_info_dicts]
+    else:
+        return None
 
-# Returns a list of metadata_tables that have not been
-# cloned into SEGMENT.IDENTIFIES_METADATA from SEGMENT
-def find_uncloned_metadata_tables(segment_tables_df, conn: connector=None, verbose:bool=True) -> List[str]:
-    existing_metadata_tables = find_existing_metadata_tables(conn=conn)
-    required_segment_tables = [row[0] for row in segment_tables_df.values]
-    required_metadata_tables = [get_metadata_table_from_segment_table(x) for x in required_segment_tables ]
-    uncloned_metadata_tables = list(set(required_metadata_tables) - set(existing_metadata_tables))
-    return uncloned_metadata_tables
+# Returns True if metadata_table under SEGMENT.IDENTIFIES_METADATA 
+# has been cloned from segment_table under SEGMENT
+# Otherwise returns False if metadata_table already exists or clone instruction failed.
+def clone_metadata_table(segment_table_dict: Dict[str,str], verbose: bool=True, conn: connector=None, preview_only: bool=True) -> bool:
+    segment_table = segment_table_dict['segment_table']
+    metadata_table = segment_table_dict['metadata_table']
+    if not metadata_table_exists(metadata_table, conn=conn, verbose=verbose):
+        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+        clone_query = f"create table if not exists {cloned_table} clone {segment_table}"
+        if verbose:
+            print(clean_query(clone_query))
+        if not preview_only:
+            try:
+                source_count = execute_count_query(f"select count(*) from {segment_table}", conn=conn, verbose=verbose)
+                if verbose:
+                    print(f"source_count:{source_count}")
+                execute_single_query(clone_query, conn=conn, verbose=verbose)
+                cloned_count = execute_count_query(f"select count(*) from {cloned_table}")
+                if verbose:
+                    print(f"cloned_count:{cloned_count}")
+                if cloned_count != source_count:
+                     print(f"ERROR: expected cloned_count:{source_count} not:{cloned_count} for {cloned_table}")
+                     return False
+                else:
+                    return True
+            except ProgrammingError as err:
+                print(f"{type(err)} str(err)")
+    return False    
+
+def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, preview_only: bool=True):
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    for segment_table_dict in get_segment_table_dicts(latest_df):
+        metadata_table_obj = MetadataTable(segment_table_dict)
+        metadata_table_obj.clone_metadata_table(conn=conn, verbose=verbose, preview_only=preview_only)
+        metadata_table_obj.add_query_dicts()
+        metadata_table_obj.show_query_dicts()
+        metadata_table_obj.run_query_dicts(conn=conn, verbose=verbose, preview_only=preview_only)
 
 ################################################
 # Tests
 ################################################
 
-def test_clone_latest_metadata_tables():
-    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
-    clone_metadata_tables(latest_df, preview_only=False)
-
-def test_find_uncloned_metadata_tables():
-    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
-    uncloned_metadata_tables = find_uncloned_metadata_tables(latest_df)
-    print(f"uncloned_metadata_tables: {len(uncloned_metadata_tables)}")
-    for metadata_table in uncloned_metadata_tables:
-        print(f"  uncloned_metadata_table: {metadata_table}")
-        
 def tests():
-    test_clone_latest_metadata_tables()
-    test_find_uncloned_metadata_tables()
-    
-    print()
     print("all tests passed in", os.path.basename(__file__))
 
 def main():
-    tests()
+    conn = create_connector()
+    create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=True)
+    print()
+
+    
+    
     
 if __name__ == "__main__":
     main()

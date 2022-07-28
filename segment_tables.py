@@ -6,7 +6,7 @@ from constants import *
 from typing import Set, List, Dict, Optional, Tuple
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
-from query_generator import query_batch_generator, create_connector, execute_batched_select_query, execute_single_query, execute_count_query, execute_simple_query
+from query_generator import query_batch_generator, create_connector, execute_batched_select_query
 from utils import matches_any, find_latest_file, is_readable_file
 from functools import cache
 import datetime
@@ -142,27 +142,15 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
 
 def test_compute_and_save_new_segment_table_dicts_df():
     data_file, new_df = compute_and_save_new_segment_table_dicts_df()
+    print(f"new segment_table_dicts_df saved to: {data_file}")
     
-def test_compute_save_load_get_new_segment_table_dicts_df():
-    new_df = compute_segment_table_dicts_df()
-    
-    test_base_name = "test_compute_save_load_get_new_segment_table_dicts_df"
-    saved_data_file = save_data_frame(test_base_name, new_df, PARQUET_FORMAT)
-    
-    # verify load_latest_data_frame
-    (loaded_data_file, loaded_df) = load_latest_data_frame(test_base_name)
-    assert loaded_data_file == saved_data_file, f"ERROR: expected:{saved_data_file} not:{loaded_data_file}"
-    assert_frame_equal(loaded_df, new_df)
-    
-    # verify get_segment_table_dicts_df load_latest=True
-    (latest_data_file, latest_df) = get_segment_table_dicts_df(test_base_name, load_latest=True)
-    assert latest_data_file == loaded_data_file, f"ERROR: expected:{loaded_data_file} not:{latest_data_file}"
-    assert_frame_equal(latest_df, loaded_df)
-        
 def test_find_segment_table_columns():
     segment_table = 'LOOKER_SOURCE.PUBLIC.ANGL_APP_OPN_TO_PIF'
     columns = find_segment_table_columns(segment_table)
     assert len(columns) > 0, f"ERROR: no columns found for segment_table: {segment_table}"
+    print(f"segment_table: {segment_table} found # columns: {len(columns)}")
+    for column in columns:
+        print(column)
 
 def tests():
     test_compute_and_save_new_segment_table_dicts_df()
