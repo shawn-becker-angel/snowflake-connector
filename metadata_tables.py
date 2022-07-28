@@ -68,7 +68,7 @@ class MetadataTable():
                 ADD COLUMN {query_dict['new_uuid']} VARCHAR \
                 DEFAULT NULL"
             if preview_only:
-                print(add_uuid_column_query)
+                print(clean_query(add_uuid_column_query))
             else:
                 execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
                 assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
