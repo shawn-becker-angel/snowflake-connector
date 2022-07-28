@@ -68,14 +68,14 @@ class MetadataTable():
                 ADD COLUMN {query_dict['new_uuid']} VARCHAR \
                 DEFAULT NULL"
             if preview_only:
-                print(clean_query(add_uuid_column_query))
+                print("\nadd_uuid_column_query:\n",clean_query(add_uuid_column_query))
             else:
                 execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
                 assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
 
         # set the new_uuid column value for each row
         if preview_only:
-            print(query_dict['set_uuid_query'])
+            print("\nset_uuid_query:\n", query_dict['set_uuid_query'])
             return False
         else:
             execute_single_query(query_dict['set_uuid_query'], conn=conn, verbose=verbose)
@@ -84,6 +84,7 @@ class MetadataTable():
     # Returns a dict that packages a set_uuid_query
     def create_query_dict(self, query_name, new_uuid, set_uuid_query):
         query_dict = {}
+        query_dict["metadata_table"] = self.metadata_table
         query_dict["name"] = query_name
         assert query_name in SEGMENT_QUERY_NAMES, f"ERROR: invalid query_name: {query_name}"
         query_dict["new_uuid"] = new_uuid
@@ -168,6 +169,7 @@ class MetadataTable():
             
     def show_query_dicts(self):
         for query_dict in self.query_dicts:
+            print("\nshow_query_dict:")
             pprint.pprint(query_dict)
 
 # Returns True if metadata_table exists under SEGMENT.IDENTIFIES_METADATA
@@ -220,15 +222,15 @@ def clone_metadata_table(segment_table_dict: Dict[str,str], verbose: bool=True, 
     metadata_table = segment_table_dict['metadata_table']
     if not metadata_table_exists(metadata_table, conn=conn, verbose=verbose):
         cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
-        clone_query = f"create table if not exists {cloned_table} clone {segment_table}"
+        clone_metadata_table_query = f"create table if not exists {cloned_table} clone {segment_table}"
         if verbose:
-            print(clean_query(clone_query))
+            print("\nclone_metadata_table_query:\n", clean_query(clone_metadata_table_query))
         if not preview_only:
             try:
                 source_count = execute_count_query(f"select count(*) from {segment_table}", conn=conn, verbose=verbose)
                 if verbose:
                     print(f"source_count:{source_count}")
-                execute_single_query(clone_query, conn=conn, verbose=verbose)
+                execute_single_query(clone_metadata_table_query, conn=conn, verbose=verbose)
                 cloned_count = execute_count_query(f"select count(*) from {cloned_table}")
                 if verbose:
                     print(f"cloned_count:{cloned_count}")
