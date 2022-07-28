@@ -2,6 +2,7 @@ from typing import Dict
 from segment_utils import get_metadata_table_from_segment_table
 from metadata_tables import describe_metadata_table
 from constants import *
+from segment_tables import get_segment_table_dicts, get_segment_table_dicts_df
 
 # Execute the segment_query that populates one new UUID column in the 
 # metadata_table table under SEGMENT.IDENTIFIES_METADATA
@@ -36,9 +37,26 @@ from constants import *
 # 5. Report the total # rows, total # of rows with NULL uuids and total # of rows with non-null uuids
 # 
 
-def compute_segment_metadata_uuid_for_segment_table_metadata_dict(segment_table_metadata_dict: Dict[str,str]) -> None:
-    metadata_table = segment_table_metadata_dict['metadata_table']
+def compute_metadata_uuid_for_metadata_table_dict(metadata_table_dict: Dict[str,str], verbose: bool=True) -> None:
+    metadata_table = metadata_table_dict['metadata_table']
     metadata_table_info = describe_metadata_table(metadata_table)
     
     for segment_query_name in SEGMENT_QUERY_NAMES:
-        print(f"metadata_table: {metadata_table}, segment_query_name: {segment_query_name}")
+        if segment_query_name in metadata_table_dict['segment_queries'].keys():
+            print(f"metadata_table: {metadata_table}, segment_query_name: {segment_query_name}")
+
+
+
+################################################
+# Tests
+################################################
+
+def test():    
+
+    print("all tests passed in", os.path.basename(__file__))
+
+def main():
+    test()
+
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,8 @@
 import os
 
+def get_uuid_column_from_segment_query_name(segment_query_name: str) -> str:
+    return f"{segment_query_name}_uuid".upper().replace("_QUERY","")
+
 # Returns metadata_table: SEGMENT__THE_CHOSEN_APP_WEB_PROD__LIVESTREAM_VIEW_STORE_BTN
 # given segment_table: SEGMENT.THE_CHOSEN_APP_WEB_PROD.LIVESTREAM_VIEW_STORE_BTN
 def get_metadata_table_from_segment_table(segment_table):
@@ -19,9 +22,6 @@ def get_segment_table_from_metadata_table(metadata_table):
     if len(parts) == 1:
         segment_table = 'LOOKER_SOURCE.PUBLIC.' + segment_table
     return segment_table
-
-def get_uuid_column_from_segment_query_name(segment_query_name: str) -> str:
-    return f"{segment_query_name}_uuid".upper().replace("_QUERY","")
 
 ################################################
 # Tests

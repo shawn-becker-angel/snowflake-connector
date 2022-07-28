@@ -15,7 +15,6 @@ from segment_utils import get_segment_table_from_metadata_table, get_metadata_ta
 from pprint import pprint
 from data_frame_utils import save_data_frame, load_latest_data_frame, is_empty_data_frame
 from pandas.testing import assert_frame_equal
-from metadata_tables import find_existing_metadata_tables
 
 # Returns the set of all queryable segment_tables that have all key_columns as well as 
 # any optinal ALL_SEARCH_COLUMNS as a data_frame. 
@@ -137,64 +136,9 @@ def find_segment_table_columns(segment_table: str, conn: connector=None, verbose
     segment_table_columns_df = execute_batched_select_query(select_query, select_columns, conn=conn, batch_size=100, timeout_seconds=5, verbose=verbose)
     return list(segment_table_columns_df.values)
 
-
-
-# Creates a clone in SEGMENT.IDENTIFIES_METADATAfor for each 
-# segment_table in SEGMENT described in segment_tables_df.
-# Returns a list of the metadata_tables in SEGMENT.IDENTIFIES_METADATA 
-# that have been newly cloned from source segment_tables in SEGMENT
-def clone_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=True, preview_only: bool=True) -> List[str]:
-    existing_metadata_tables = find_existing_metadata_tables(conn=conn)
-    newly_cloned_tables = []
-    for row in segment_tables_df.values:
-        segment_table = row[0]
-        metadata_table = get_metadata_table_from_segment_table(segment_table)
-        if metadata_table not in existing_metadata_tables:
-            cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
-            clone_query = f"create table if not exists {cloned_table} clone {segment_table}"
-            if verbose:
-                print(clone_query)
-            if not preview_only:
-                try:
-                    source_count = execute_count_query(f"select count(*) from {segment_table}")
-                    if verbose:
-                        print(f"source_count:{source_count}")
-                    execute_single_query(clone_query, conn=conn, verbose=verbose)
-                    cloned_count = execute_count_query(f"select count(*) from {cloned_table}")
-                    if verbose:
-                            print(f"cloned_count:{cloned_count}")
-                    assert cloned_count == source_count, f"ERROR: expected cloned_count:{source_count} but got {cloned_count}"
-                    newly_cloned_tables.append(metadata_table)
-                except Exception as e:
-                    print(f"{type(e)} {str(e)}")
-    if verbose:
-        print("newly_cloned_tables:\n", newly_cloned_tables)
-    return newly_cloned_tables
-
-# Returns a list of segment_tables that have not been
-# cloned into SEGMENT.IDENTIFIES_METADATA from SEGMENT
-def find_uncloned_segment_tables(segment_tables_df, conn: connector=None, verbose:bool=True) -> List[str]:
-    existing_metadata_tables = find_existing_metadata_tables(conn=conn)
-    required_segment_tables = [row[0] for row in segment_tables_df.values]
-    required_metadata_tables = [get_metadata_table_from_segment_table(x) for x in required_segment_tables ]
-    uncloned_metadata_tables = list(set(required_metadata_tables) - set(existing_metadata_tables))
-    uncloned_segment_tables = [get_segment_table_from_metadata_table(x) for x in uncloned_metadata_tables]
-    return uncloned_segment_tables
-
 ################################################
 # Tests
 ################################################
-
-def test_clone_latest_segment_tables():
-    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
-    clone_segment_tables(latest_df, preview_only=False)
-
-def test_find_uncloned_segment_tables():
-    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
-    uncloned_segment_tables = find_uncloned_segment_tables(latest_df)
-    print(f"uncloned_segment_tables: {len(uncloned_segment_tables)}")
-    for segment_table in uncloned_segment_tables:
-        print(f"  uncloned segment_table: {segment_table}")
 
 def test_compute_and_save_new_segment_table_dicts_df():
     data_file, new_df = compute_and_save_new_segment_table_dicts_df()
@@ -223,8 +167,6 @@ def test_find_segment_table_columns():
 def tests():
     test_compute_and_save_new_segment_table_dicts_df()
     test_find_segment_table_columns()
-    test_clone_latest_segment_tables()
-    test_find_uncloned_segment_tables()
     
     print()
     print("all tests passed in", os.path.basename(__file__))
