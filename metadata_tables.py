@@ -3,9 +3,11 @@ import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
 from query_generator import create_connector, clean_query, execute_simple_query, execute_single_query, execute_count_query
 from constants import *   
-from typing import Set, List, Dict, Optional, Tuple
+from typing import Set, List, Dict, Optional, Tuple, Any
 from segment_utils import get_metadata_table_from_segment_table
 from segment_tables import get_segment_table_dicts_df, get_segment_table_dicts
+import pandas as pd
+from data_frame_utils import is_empty_data_frame
 
 # Given a segment_table_dict with the following example structure:
 # {
@@ -35,8 +37,8 @@ class MetadataTable():
         self.segment_table_dict = segment_table_dict
         self.metadata_table = segment_table_dict['metadata_table']
         self.identifies_metadata_table = f"SEGMENT.IDENTIFIES_METADATA.{self.metadata_table}"
-        self.segment_table_columns = list(set(segment_table_dict['columns'].split("-")))
-        self.select_clause = ', '.join([f"id.{x}" for x in self.segment_table_columns])
+        self.segment_table_columns = ['USER_ID']
+        self.select_clause = ", ".join([f"id.{x}" for x in self.segment_table_columns])
         self.not_null_clause = " and ".join([f"id.{x} is not NULL" for x in self.segment_table_columns])
         self.ellis_island_table = "STITCH_LANDING.ELLIS_ISLAND.USER"
         self.persona_users_table = "SEGMENT.PERSONAS_THE_CHOSEN_WEB.USERS"
@@ -53,33 +55,40 @@ class MetadataTable():
             return False       
     
     # Executes a set_uuid_query after adding the new uuid column if needed
-    # Returns True if the query was successfully run
-    # otherwise return False
-    def run_query_dict(self, query_dict, conn: connector=None, verbose: bool=True, preview_only: bool=True) -> bool:
-        if not metadata_table_exists(self.metadata_table, conn=conn, verbose=verbose):
-            return False
+    # Returns the updated query_dict with added total and uuid_counts if the query was successfully run
+    # otherwise return None
+    def run_query_dict(self, query_dict, conn: connector=None, verbose: bool=True, preview_only: bool=True) -> Optional[Dict[str,Any]]:
+        # if not metadata_table_exists(self.metadata_table, conn=conn, verbose=verbose):
+        #     return None
 
         # add new_uuid column if needed
-        new_uuid = query_dict['new_uuid']
-        if new_uuid not in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose):
-            add_uuid_column_query = f"\
-                ALTER TABLE {self.identifies_metadata_table} \
-                ADD COLUMN {query_dict['new_uuid']} VARCHAR \
-                DEFAULT NULL"
-            if preview_only:
-                print("\nadd_uuid_column_query:\n",clean_query(add_uuid_column_query))
-            else:
-                execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
-                assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
+        new_uuid = query_dict['new_uuid'].upper()
+        # if new_uuid not in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose):
+        #     add_uuid_column_query = f"\
+        #         ALTER TABLE {self.identifies_metadata_table} \
+        #         ADD COLUMN {new_uuid} VARCHAR \
+        #         DEFAULT NULL"
+        #     if preview_only:
+        #         print("\nadd_uuid_column_query:\n",clean_query(add_uuid_column_query))
+        #     else:
+        #         execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
+        #         assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
 
         # set the new_uuid column value for each row
         if preview_only:
             print("\nset_uuid_query:\n", query_dict['set_uuid_query'])
-            return False
-        else:
+            return None
+        else:                
+            cloned_table = self.identifies_metadata_table
             execute_single_query(query_dict['set_uuid_query'], conn=conn, verbose=verbose)
-            return True
+            query_dict['new_uuid_post_total_count'] = execute_count_query(f"SELECT count(*) from {cloned_table} ", conn=conn, verbose=verbose)
+            query_dict['new_uuid_non_null_count'] = execute_count_query(f"SELECT count(*) from {cloned_table} where {query_dict['new_uuid']} is not NULL", conn=conn, verbose=verbose)
+            
+            print(f"cloned:{cloned_table} {query_dict['new_uuid']} total:{query_dict['new_uuid_post_total_count']} non-null:{query_dict['new_uuid_non_null_count']}")
 
+            # total and new_uuid counts have been added to this query_dict
+            return query_dict
+    
     # Returns a dict that packages a set_uuid_query
     def create_query_dict(self, query_name, new_uuid, set_uuid_query):
         query_dict = {}
@@ -97,15 +106,12 @@ class MetadataTable():
         query_name = "user_id_query"
         new_uuid = "user_id_uuid"
         set_uuid_query = f"\
-            WITH W AS (\
-                SELECT {self.select_clause}, ei.uuid AS user_id_uuid\
-                FROM {self.identifies_metadata_table} id\
-                LEFT JOIN {self.ellis_island_table} ei\
-                    ON id.user_id = ei.uuid\
-                WHERE {self.not_null_clause}\
-            ) UPDATE {self.identifies_metadata_table} id\
-                SET id.user_id_uuid = W.user_id_uuid"
-
+                UPDATE {self.identifies_metadata_table} id1 \
+                set user_id_uuid = ei.uuid \
+                FROM {self.identifies_metadata_table} id \
+                LEFT OUTER JOIN {self.ellis_island_table} ei\
+                ON id.user_id = ei.uuid\
+                WHERE id1.user_id = id.user_id"
         user_id_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
         self.query_dicts.append(user_id_query_dict)
         
@@ -113,14 +119,13 @@ class MetadataTable():
         query_name = "username_query"
         new_uuid = "username_uuid"
         set_uuid_query = f"\
-            WITH W AS (\
-                SELECT {self.select_clause}, ei.uuid AS username_uuid\
+                UPDATE {self.identifies_metadata_table} id1\
+                SET username_uuid = ei.uuid \
                 FROM {self.identifies_metadata_table} id\
                 LEFT JOIN {self.ellis_island_table} ei\
                     ON id.email = ei.username\
-                WHERE {self.not_null_clause}\
-            ) UPDATE {self.identifies_metadata_table} id\
-                SET id.username_uuid = W.username_uuid"
+                WHERE id1.user_id = id.user_id"
+                
                 
         username_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
         self.query_dicts.append(username_query_dict)
@@ -129,16 +134,14 @@ class MetadataTable():
         query_name = "persona_query"
         new_uuid = "persona_uuid"
         set_uuid_query = f"\
-            WITH W AS (\
-                SELECT {self.select_clause}, ei.uuid AS persona_uuid\
+                UPDATE {self.identifies_metadata_table} id1\
+                SET persona_uuid = ei.uuid\
                 FROM {self.identifies_metadata_table} id\
                 JOIN {self.persona_users_table} pu\
                     ON id.user_id = pu.id  \
                 LEFT JOIN {self.ellis_island_table} ei\
                     ON pu.id = ei.uuid\
-                WHERE {self.not_null_clause}\
-            ) UPDATE {self.identifies_metadata_table} id\
-                SET id.persona_uuid = W.persona_uuid"
+                WHERE id1.user_id = id.user_id"
         
         persona_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
         self.query_dicts.append(persona_query_dict)
@@ -148,28 +151,37 @@ class MetadataTable():
             query_name = "rid_query"
             new_uuid = "rid_uuid"
             set_uuid_query = f"\
-                WITH W AS (\
-                    SELECT {self.select_clause}, ei.uuid AS rid_uuid\
+                    UPDATE {self.identifies_metadata_table} id1\
+                    SET rid_uuid = ei.uuid\
                     FROM {self.identifies_metadata_table} id\
                     JOIN {self.watchtime_table} wt\
                         ON id.rid = wt.rid\
                     LEFT JOIN {self.ellis_island_table} ei\
                         ON wt.user_id = ei.uuid\
-                    WHERE {self.not_null_clause}\
-                ) UPDATE {self.identifies_metadata_table} id\
-                    SET id.rid_uuid = W.rid_uuid"
+                    WHERE id1.user_id = id.user_id"
             
             rid_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
             self.query_dicts.append(rid_query_dict)
     
-    def run_query_dicts(self, conn: connector=None, verbose: bool=True, preview_only: bool=True):
+    def run_query_dicts(self, conn: connector=None, verbose: bool=True, preview_only: bool=True) -> pd.DataFrame:
+        uuid_counts = {}
+        uuid_counts['metadata_table'] = None
+        uuid_counts['total'] = None
+        for uuid in SEGMENT_UUIDS:
+            uuid_counts[uuid] = None
+
         for query_dict in self.query_dicts:
-            self.run_query_dict(query_dict, conn=conn, verbose=verbose, preview_only=preview_only)
-            
-# Returns True if metadata_table exists under SEGMENT.IDENTIFIES_METADATA
-def metadata_table_exists(metadata_table: str, conn: connector=None, verbose:bool=True):
-    existing_metadata_tables = find_existing_metadata_tables(conn=conn, verbose=verbose)
-    return True if metadata_table in existing_metadata_tables else False
+            metadata_table = query_dict['metadata_table']
+            uuid_counts['metadata_table'] = metadata_table
+            result = self.run_query_dict(query_dict, conn=conn, verbose=verbose, preview_only=preview_only)
+            if result is not None:
+                query_dict_with_uuid_counts = result
+                uuid_counts['total'] = query_dict_with_uuid_counts['new_uuid_post_total_count']
+                uuid = query_dict_with_uuid_counts['new_uuid'].upper()
+                uuid_counts[uuid] = query_dict_with_uuid_counts['new_uuid_non_null_count']
+        df = pd.DataFrame.from_dict(data=uuid_counts, orient="index").transpose()
+        return df
+
     
 # Returns a list of metadata_tables that end with IDENTIFIES 
 # and already exist in SEGMENT.IDENTIFIES_METADATA
@@ -182,6 +194,11 @@ def find_existing_metadata_tables(conn: connector=None, verbose:bool=True) -> Li
         line_dict = dict(zip(show_tables_columns, line))
         existing_metadata_tables.append(f"{line_dict['name']}")
     return existing_metadata_tables
+
+# Returns True if metadata_table exists under SEGMENT.IDENTIFIES_METADATA
+def metadata_table_exists(metadata_table: str, conn: connector=None, verbose:bool=True):
+    existing_metadata_tables = find_existing_metadata_tables(conn=conn, verbose=verbose)
+    return True if metadata_table in existing_metadata_tables else False
 
 # Returns a list of dict lines describing the given metadata_table in snowflake
 TABLE_DESCRIBE_COLUMNS = ['name','type','kind','null?','default','primary key','unique key','check','expression','comment','policy name']
@@ -237,13 +254,20 @@ def clone_metadata_table(segment_table_dict: Dict[str,str], verbose: bool=True, 
                 print(f"{type(err)} str(err)")
     return False    
 
-def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, preview_only: bool=True):
+def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, preview_only: bool=True) -> pd.DataFrame:
     [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    union_df = None
     for segment_table_dict in get_segment_table_dicts(latest_df):
         metadata_table_obj = MetadataTable(segment_table_dict)
         metadata_table_obj.clone_metadata_table(conn=conn, verbose=verbose, preview_only=preview_only)
         metadata_table_obj.add_query_dicts()
-        metadata_table_obj.run_query_dicts(conn=conn, verbose=verbose, preview_only=preview_only)
+        df = metadata_table_obj.run_query_dicts(conn=conn, verbose=verbose, preview_only=preview_only)
+        if len(df) > 0:
+            if union_df is None:
+                union_df = df
+            else:
+                union_df = pd.concat([union_df, df], axis=0)
+    return union_df
 
 ################################################
 # Tests
@@ -254,7 +278,8 @@ def tests():
 
 def main():
     conn = create_connector()
-    create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=True)
+    union_df = create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=False)
+    print(union_df)
     print("done")
     
 if __name__ == "__main__":
