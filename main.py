@@ -2,7 +2,7 @@ from constants import *
 from timefunc import timefunc
 from query_generator import create_connector
 from segment_tables import compute_and_save_new_segment_table_dicts_df
-from metadata_tables import create_and_run_metadata_tables
+from metadata_tables import create_and_run_metadata_tables, summarize_metadata_tables
 from data_frame_utils import save_data_frame, load_data_frame
 
 
@@ -26,6 +26,8 @@ def main():
         loaded_df = load_data_frame(saved_csv_file)
         print(f"loaded_df loaded from {saved_csv_file}:\n", loaded_df)
         print(loaded_df)
+        
+    summarize_metadata_tables(conn=conn, verbose=True)
 
 if __name__ == "__main__":
     main()

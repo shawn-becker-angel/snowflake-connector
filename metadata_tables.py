@@ -1,4 +1,5 @@
 
+from platform import java_ver
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
 from query_generator import create_connector, clean_query, execute_simple_query, execute_single_query, execute_count_query
@@ -8,6 +9,7 @@ from segment_utils import get_metadata_table_from_segment_table
 from segment_tables import get_segment_table_dicts_df, get_segment_table_dicts
 import pandas as pd
 from data_frame_utils import is_empty_data_frame
+from itertools import combinations
 
 # Given a segment_table_dict with the following example structure:
 # {
@@ -37,7 +39,7 @@ class MetadataTable():
         self.segment_table_dict = segment_table_dict
         self.metadata_table = segment_table_dict['metadata_table']
         self.identifies_metadata_table = f"SEGMENT.IDENTIFIES_METADATA.{self.metadata_table}"
-        self.segment_table_columns = ['USER_ID']
+        self.segment_table_columns = segment_table_dict['columns'].split("-")
         self.select_clause = ", ".join([f"id.{x}" for x in self.segment_table_columns])
         self.not_null_clause = " and ".join([f"id.{x} is not NULL" for x in self.segment_table_columns])
         self.ellis_island_table = "STITCH_LANDING.ELLIS_ISLAND.USER"
@@ -63,16 +65,17 @@ class MetadataTable():
 
         # add new_uuid column if needed
         new_uuid = query_dict['new_uuid'].upper()
-        # if new_uuid not in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose):
-        #     add_uuid_column_query = f"\
-        #         ALTER TABLE {self.identifies_metadata_table} \
-        #         ADD COLUMN {new_uuid} VARCHAR \
-        #         DEFAULT NULL"
-        #     if preview_only:
-        #         print("\nadd_uuid_column_query:\n",clean_query(add_uuid_column_query))
-        #     else:
-        #         execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
-        #         assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
+        existing_columns = get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose)
+        if existing_columns is None or new_uuid not in existing_columns:
+            add_uuid_column_query = f"\
+                ALTER TABLE {self.identifies_metadata_table} \
+                ADD COLUMN {new_uuid} VARCHAR \
+                DEFAULT NULL"
+            if preview_only:
+                print("\nadd_uuid_column_query:\n",clean_query(add_uuid_column_query))
+            else:
+                execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
+                assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
 
         # set the new_uuid column value for each row
         if preview_only:
@@ -160,7 +163,7 @@ class MetadataTable():
                         ON wt.user_id = ei.uuid\
                     WHERE id1.user_id = id.user_id"
             
-            rid_query_dict = self.create_query_dict(query_name, new_uuid, set_uuid_query)
+            rid_query_dict = self.create_query_dict(query_name, new_uuid, clean_query(set_uuid_query))
             self.query_dicts.append(rid_query_dict)
     
     def run_query_dicts(self, conn: connector=None, verbose: bool=True, preview_only: bool=True) -> pd.DataFrame:
@@ -255,8 +258,8 @@ def clone_metadata_table(segment_table_dict: Dict[str,str], verbose: bool=True, 
     return False    
 
 def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, preview_only: bool=True) -> pd.DataFrame:
-    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
     union_df = None
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
     for segment_table_dict in get_segment_table_dicts(latest_df):
         metadata_table_obj = MetadataTable(segment_table_dict)
         metadata_table_obj.clone_metadata_table(conn=conn, verbose=verbose, preview_only=preview_only)
@@ -269,6 +272,66 @@ def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, pre
                 union_df = pd.concat([union_df, df], axis=0)
     return union_df
 
+def summarize_metadata_tables(conn: connector=None, verbose: bool=True):
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    for segment_table_dict in get_segment_table_dicts(latest_df):
+        metadata_table = segment_table_dict['metadata_table']
+        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+        try:
+            total_count = execute_count_query(f"SELECT count(*) from {cloned_table}", conn=conn)
+            all_4_equal_count = execute_count_query(f"SELECT count(*) from {cloned_table} where user_id = user_id_uuid and user_id_uuid = username_uuid and username_uuid = persona_uuid", conn=conn)
+            all_4_equal_percent = all_4_equal_count * 100 / total_count if total_count > 0 else 0.0
+            print(f"{all_4_equal_percent:5.2f}% {metadata_table} total_count:{total_count} all_4_equal_count:{all_4_equal_count}")
+        except Exception as e:
+            total_count = 0
+            all_4_equal_count = 0
+            all_4_equal_percent = all_4_equal_count * 100 / total_count if total_count > 0 else 0.0
+            print(f"{all_4_equal_percent:5.2f}% {metadata_table} FAILED total_count:{total_count} all_4_equal_count:{all_4_equal_count}")            
+
+def summarize_metadata_table_combinations(conn: connector=None, verbose: bool=True):
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    for segment_table_dict in get_segment_table_dicts(latest_df):
+        metadata_table = segment_table_dict['metadata_table']
+        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+        metadata_table_columns = get_existing_metadata_table_columns(metadata_table, conn=conn, verbose=verbose)
+        if metadata_table_columns is None or len(metadata_table_columns) < 1:
+            print(f"{metadata_table} has no existing columns")
+        else:
+            keep_columns = []
+            for uuid_column in SEGMENT_UUIDS:
+                if uuid_column.upper() in metadata_table_columns:
+                    count = 0
+                    try:
+                        count = execute_count_query(f"SELECT count(*) from {cloned_table} where {uuid_column} is not null", conn=conn) 
+                        if count > 0:
+                            keep_columns.append(uuid_column)
+                    except Exception as e:
+                        pass
+            N = len(keep_columns)
+            if N > 0:
+                combos = []
+                a = keep_columns[0:N]
+                for k in range(2,N+1):
+                    for j in combinations(a,k):
+                        combos.append(j)
+                
+                combo_queries = []
+                for combo in combos:
+                    combo_str = metadata_table + "@" + "-".join([f"{x}" for x in combo])
+                    all_equals_clause = " and ".join([f"{combo[0]} = {x}" for x in combo[1:]])
+                    not_null_clause = " and ".join([f"{x} is not null" for x in combo])
+                    query = f"SELECT count(*) from {cloned_table} where {all_equals_clause} and {not_null_clause}"
+                    count = -1
+                    try:
+                        count = execute_count_query(query, conn=conn)
+                        count_str = f"{count:,}"
+                        combo_queries.append({combo_str: count_str})
+                    except Exception as e:
+                        combo_queries.append({combo_str:query})
+
+                for combo_query in combo_queries:
+                    print(combo_query)
+            
 ################################################
 # Tests
 ################################################
@@ -278,8 +341,11 @@ def tests():
 
 def main():
     conn = create_connector()
-    union_df = create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=False)
-    print(union_df)
+    # union_df = create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=True)
+    # print(union_df)
+    
+    summarize_metadata_table_combinations(conn=conn, verbose=True)
+    
     print("done")
     
 if __name__ == "__main__":
