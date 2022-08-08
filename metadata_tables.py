@@ -2,7 +2,7 @@
 from platform import java_ver
 import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
-from query_generator import create_connector, clean_query, execute_simple_query, execute_single_query, execute_count_query
+from query_generator import create_connector, clean_query, execute_simple_query, execute_single_query, execute_count_query, add_column_if_not_exists
 from constants import *   
 from typing import Set, List, Dict, Optional, Tuple, Any
 from segment_utils import get_metadata_table_from_segment_table
@@ -376,9 +376,57 @@ def summarize_metadata_table_combinations(conn: connector=None, verbose: bool=Tr
         metadata_table_columns = get_existing_metadata_table_columns(metadata_table, conn=conn, verbose=verbose)
         combo_queries = summarize_metadata_table_combos(metadata_table, metadata_table_columns, preview_only=preview_only, conn=conn)
         all_combo_queries.extend(combo_queries)
-
     for combo_query in all_combo_queries:
         print(combo_query)
+        
+# Executes add "valid_uuid" column to each s
+def add_and_set_valid_uuid_columns(conn: connector=None, verbose: bool=True) -> None:
+    
+    # copied highest combo counts from file:metadata_tables.xlsx sheet:UUID_COMBO_COUNTS
+    UUID_COMBO_COUNTS = [
+        # {'SEGMENT__ANGEL_APP_IOS__IDENTIFIES@USER_ID_UUID-USERNAME_UUID': '25'},
+        # {'SEGMENT__ANGEL_MOBILE_ANDROID_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '322,802'},
+        # {'SEGMENT__ANGEL_MOBILE_IOS_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '713,833'},
+        # {'SEGMENT__ANGEL_MOBILE_RN_ANDROID_PROD__IDENTIFIES@USER_ID_UUID-USERNAME_UUID': '654'},
+        # {'SEGMENT__ANGEL_MOBILE_RN_IOS_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '3,919'},
+        # {'SEGMENT__ANGEL_TV_ANDROIDTV_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '1,138'},
+        # {'SEGMENT__PERSONAS_THE_CHOSEN_WEB__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '1,890,668'},
+        # {'SEGMENT__THE_CHOSEN_APP_WEB_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '238,426'},
+        # {'SEGMENT__THE_CHOSEN_MOBILE_ANDROID_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '2,452,006'},
+        {'SEGMENT__ANGEL_FUNDING_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '64720'},
+        {'SEGMENT__ANGEL_NFT_WEBSITE_PROD__IDENTIFIES@USER_ID_UUID-USERNAME_UUID': '14861'},
+        # {'SEGMENT__ANGEL_TV_FIRETV_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '9'},
+        {'SEGMENT__ANGEL_WEB__IDENTIFIES@USER_ID_UUID-USERNAME_UUID': '3955'},
+        # {'SEGMENT__PERSONAS_THE_CHOSEN_MOBILE__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '279,081'},
+        # {'SEGMENT__THE_CHOSEN_MOBILE_IOS_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '2,317,637'},
+        # {'SEGMENT__THE_CHOSEN_APP_REACT_NATIVE_PROD__IDENTIFIES@USER_ID_UUID-PERSONA_UUID': '635,439'},
+    ]
+    
+    for combo_dict in UUID_COMBO_COUNTS:
+        uuid_combo = list(combo_dict.keys())[0]
+        parts = uuid_combo.split("@")
+        metadata_table = parts[0]
+        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+        uuids = parts[1].split("-")
+        add_valid_uuid_query = f"ALTER TABLE {cloned_table} ADD COLUMN VALID_UUID VARCHAR DEFAULT NULL"
+        null_valid_uuid_query = f"UPDATE {cloned_table} SET VALID_UUID = NULL"
+        set_valid_uuid_query = f"UPDATE {cloned_table} SET VALID_UUID = {uuids[0]} where {uuids[0]} = {uuids[1]} and {uuids[0]} is not NULL"
+        count_valid_uuid_query = f"SELECT COUNT(*) from {cloned_table} WHERE VALID_UUID is not NULL"
+        try:
+            print(f"run manually:\n{add_valid_uuid_query};")
+            print(f"run manually:\n{null_valid_uuid_query};")
+            print(f"run manually:\n{set_valid_uuid_query};")
+            print(f"run manually:\n{count_valid_uuid_query};")
+            # result1 = add_column_if_not_exists(schema='PUBLIC', table=cloned_table, column="VALID_UUID", datatype="VARCHAR", default_value="DEFAULT NULL", conn=conn, verbose=verbose)
+            # result2 = execute_single_query(null_valid_uuid_query,conn=conn,verbose=False)
+            # result3 = execute_single_query(set_valid_uuid_query,conn=conn,verbose=False)
+            # result4 = execute_count_query(f"select count(*) from {cloned_table} where valid_uuid is not null",conn=conn, verbose=verbose)
+            # print(result4)
+            continue
+        except Exception as e:
+            print(f"\nmanual run needed:\n{add_valid_uuid_query};")
+            print(f"\nmanual run needed:\n{set_valid_uuid_query};")
+
             
 ################################################
 # Tests
@@ -390,7 +438,7 @@ def tests():
 def main():
     conn = create_connector()
     
-    summarize_unqueriable_metadata_table_combinations()
+    add_and_set_valid_uuid_columns(conn=conn)
     
     print("done")
     

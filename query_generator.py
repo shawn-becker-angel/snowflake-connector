@@ -4,7 +4,7 @@ import snowflake.connector as connector
 from snowflake.connector import ProgrammingError
 from constants import *   
 from timefunc import timefunc
-from typing import List, Any
+from typing import List, Any, Optional
 
 def create_connector(verbose: bool=True):
     conn = connector.connect(
@@ -86,16 +86,19 @@ def execute_single_query(
     single_query: str, 
     conn: connector=None, 
     timeout_seconds: int=DEFAULT_TIMEOUT_SECONDS, 
-    verbose: bool=False) -> None:
-
+    verbose: bool=False) -> Optional[Any]:
+    exc = None
+    single_query = clean_query(single_query)
     if verbose:
         print(f"execute_create_query.single_query:\n{single_query};")
     query_batch_iterator = query_batch_generator(single_query, conn=conn, timeout_seconds=timeout_seconds, batch_size=1, verbose=verbose)
     while True:
         try:
             next(query_batch_iterator)
-        except StopIteration:
+        except (StopIteration, Exception) as e:
+            exc = e
             break
+    return exc
 
 # Use this to execute a query and get all result rows at once
 def execute_simple_query(
@@ -173,6 +176,21 @@ def execute_batched_select_query(
             break
     union_df = union_df.drop_duplicates(keep="first")
     return union_df
+
+# Adds column if not exists and returns the result of execute_single_query
+def add_column_if_not_exists(schema:str, table:str, column:str, datatype:str, default_value:str, conn: connector=None, timeout_seconds: int=DEFAULT_TIMEOUT_SECONDS, verbose: bool=True) -> Optional[Any]:
+    single_query = f"\
+    BEGIN\
+    IF (NOT EXISTS(SELECT * \
+            FROM INFORMATION_SCHEMA.COLUMNS \
+            WHERE TABLE_NAME = '{table}' \
+            AND TABLE_SCHEMA = '{schema}' \
+            AND COLUMN_NAME = '{column}')) THEN \
+        ALTER TABLE IF EXISTS {table} ADD COLUMN {column} {datatype} {default_value}; \
+    END IF; \
+    END; "
+    return execute_single_query(single_query=clean_query(single_query), conn=conn, verbose=verbose, timeout_seconds=timeout_seconds)
+
 
 
 ################################################
