@@ -75,7 +75,9 @@ class MetadataTable():
                 print("\nadd_uuid_column_query:\n",clean_query(add_uuid_column_query))
             else:
                 execute_single_query(add_uuid_column_query, conn=conn, verbose=verbose)
-                assert new_uuid in get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose), f"ERROR: new_uuid:{new_uuid} column not added"
+                columns = get_existing_metadata_table_columns(self.metadata_table, conn=conn, verbose=verbose)
+                if columns is not None and len(columns) > 0:
+                    assert new_uuid in columns, f"ERROR: new_uuid:{new_uuid} column not added"
 
         # set the new_uuid column value for each row
         if preview_only:
@@ -257,14 +259,27 @@ def clone_metadata_table(segment_table_dict: Dict[str,str], verbose: bool=True, 
                 print(f"{type(err)} str(err)")
     return False    
 
+# create and run a single MetadataTable object
+def create_and_run_metadata_table(segment_table_dict: Dict[str,str], verbose: bool=True, preview_only: bool=True, conn: connector=None) -> pd.DataFrame:
+    metadata_table_obj = MetadataTable(segment_table_dict)
+    metadata_table_obj.clone_metadata_table(conn=conn, verbose=verbose, preview_only=preview_only)
+    metadata_table_obj.add_query_dicts()
+    df = metadata_table_obj.run_query_dicts(conn=conn, verbose=verbose, preview_only=preview_only)
+    return df
+
+def get_segment_table_dict(segment_table: str) -> Optional[Dict[str,str]]:
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    for segment_table_dict in get_segment_table_dicts(latest_df):
+        if segment_table_dict['segment_table'] == segment_table:
+            return segment_table_dict
+    return None
+    
+# create and run all MetadataTable objects
 def create_and_run_metadata_tables(conn: connector=None, verbose: bool=True, preview_only: bool=True) -> pd.DataFrame:
     union_df = None
     [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
     for segment_table_dict in get_segment_table_dicts(latest_df):
-        metadata_table_obj = MetadataTable(segment_table_dict)
-        metadata_table_obj.clone_metadata_table(conn=conn, verbose=verbose, preview_only=preview_only)
-        metadata_table_obj.add_query_dicts()
-        df = metadata_table_obj.run_query_dicts(conn=conn, verbose=verbose, preview_only=preview_only)
+        df = create_and_run_metadata_table(segment_table_dict, verbose=verbose, preview_only=preview_only, conn=conn)
         if len(df) > 0:
             if union_df is None:
                 union_df = df
@@ -288,49 +303,82 @@ def summarize_metadata_tables(conn: connector=None, verbose: bool=True):
             all_4_equal_percent = all_4_equal_count * 100 / total_count if total_count > 0 else 0.0
             print(f"{all_4_equal_percent:5.2f}% {metadata_table} FAILED total_count:{total_count} all_4_equal_count:{all_4_equal_count}")            
 
-def summarize_metadata_table_combinations(conn: connector=None, verbose: bool=True):
+# execute (or if preview_only just print) all combo_queries for the given metadata_table and its columns
+def summarize_metadata_table_combos(metadata_table: str, metadata_table_columns: List[str], preview_only: bool=False, conn: connector=None) -> List[str]:
+    cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+    keep_columns = []
+    combo_queries = []
+    for uuid_column in SEGMENT_UUIDS:
+        if metadata_table_columns is not None and len(metadata_table_columns) > 0 and uuid_column.upper() in metadata_table_columns:
+            query = f"SELECT count(*) from {cloned_table} where {uuid_column} is not null"
+            if preview_only:
+                keep_columns.append(uuid_column)
+                combo_queries.append({"count_query":query})
+            else:
+                count = 0
+                try:
+                    count = execute_count_query(f"SELECT count(*) from {cloned_table} where {uuid_column} is not null", conn=conn) 
+                    if count > 0:
+                        keep_columns.append(uuid_column)
+                except Exception as e:
+                    pass
+    N = len(keep_columns)
+    if N > 0:
+        combos = []
+        a = keep_columns[0:N]
+        for k in range(2,N+1):
+            for j in combinations(a,k):
+                combos.append(j)
+        
+        for combo in combos:
+            combo_str = metadata_table + "@" + "-".join([f"{x}" for x in combo])
+            all_equals_clause = " and ".join([f"{combo[0]} = {x}" for x in combo[1:]])
+            not_null_clause = " and ".join([f"{x} is not null" for x in combo])
+            query = f"SELECT count(*) from {cloned_table} where {all_equals_clause} and {not_null_clause}"
+            if preview_only:
+                combo_queries.append({combo_str: query})
+            else:
+                count = -1
+                try:
+                    count = execute_count_query(query, conn=conn)
+                    count_str = f"{count:,}"
+                    combo_queries.append({combo_str: count_str})
+                except Exception as e:
+                    combo_queries.append({combo_str:query})
+    return combo_queries
+
+# print all queries for metadata_tables that cannot be 
+# queries using snowflake python connector
+def summarize_unqueriable_metadata_table_combinations():
+    UNQUERIABLE_METADATA_TABLES = [
+        # { "metadata_table": 'SEGMENT__ANGEL_APP_IOS__IDENTIFIES', 
+        #   "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID'] },
+        # { "metadata_table": 'SEGMENT__ANGEL_FUNDING_PROD__IDENTIFIES', 
+        #   "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID'] },
+        { "metadata_table": 'SEGMENT__ANGEL_NFT_WEBSITE_PROD__IDENTIFIES', 
+          "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID','RID_UUID'] },
+        # { "metadata_table": 'SEGMENT__ANGEL_WEB__IDENTIFIES', 
+        #   "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID','RID_UUID'] },
+    ]
+    for unqueriable in UNQUERIABLE_METADATA_TABLES:
+        metadata_table = unqueriable['metadata_table']
+        metadata_columns = unqueriable['metadata_columns']
+        combo_queries = summarize_metadata_table_combos(metadata_table, metadata_columns, preview_only=True)
+        for combo_query in combo_queries:
+            print(combo_query)
+
+# execute (or if preview_only just print) all combo_queries for all metadata_tables and their columns                 
+def summarize_metadata_table_combinations(conn: connector=None, verbose: bool=True, preview_only: bool=False) -> List[str]:
+    all_combo_queries = []
     [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
     for segment_table_dict in get_segment_table_dicts(latest_df):
         metadata_table = segment_table_dict['metadata_table']
-        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
         metadata_table_columns = get_existing_metadata_table_columns(metadata_table, conn=conn, verbose=verbose)
-        if metadata_table_columns is None or len(metadata_table_columns) < 1:
-            print(f"{metadata_table} has no existing columns")
-        else:
-            keep_columns = []
-            for uuid_column in SEGMENT_UUIDS:
-                if uuid_column.upper() in metadata_table_columns:
-                    count = 0
-                    try:
-                        count = execute_count_query(f"SELECT count(*) from {cloned_table} where {uuid_column} is not null", conn=conn) 
-                        if count > 0:
-                            keep_columns.append(uuid_column)
-                    except Exception as e:
-                        pass
-            N = len(keep_columns)
-            if N > 0:
-                combos = []
-                a = keep_columns[0:N]
-                for k in range(2,N+1):
-                    for j in combinations(a,k):
-                        combos.append(j)
-                
-                combo_queries = []
-                for combo in combos:
-                    combo_str = metadata_table + "@" + "-".join([f"{x}" for x in combo])
-                    all_equals_clause = " and ".join([f"{combo[0]} = {x}" for x in combo[1:]])
-                    not_null_clause = " and ".join([f"{x} is not null" for x in combo])
-                    query = f"SELECT count(*) from {cloned_table} where {all_equals_clause} and {not_null_clause}"
-                    count = -1
-                    try:
-                        count = execute_count_query(query, conn=conn)
-                        count_str = f"{count:,}"
-                        combo_queries.append({combo_str: count_str})
-                    except Exception as e:
-                        combo_queries.append({combo_str:query})
+        combo_queries = summarize_metadata_table_combos(metadata_table, metadata_table_columns, preview_only=preview_only, conn=conn)
+        all_combo_queries.extend(combo_queries)
 
-                for combo_query in combo_queries:
-                    print(combo_query)
+    for combo_query in all_combo_queries:
+        print(combo_query)
             
 ################################################
 # Tests
@@ -341,10 +389,8 @@ def tests():
 
 def main():
     conn = create_connector()
-    # union_df = create_and_run_metadata_tables(conn=conn, verbose=True, preview_only=True)
-    # print(union_df)
     
-    summarize_metadata_table_combinations(conn=conn, verbose=True)
+    summarize_unqueriable_metadata_table_combinations()
     
     print("done")
     

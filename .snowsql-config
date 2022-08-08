@@ -1,0 +1,12 @@
+[connections]
+accountname = angel
+username = ops
+password = 'pWm_DRpGHANmnmP7PzoE4fvZ*HosTNayZyj8Z4TvEN9GAAgs*eaxtZ-osj_Kv!t-Nz7PjGf3WnyzjikckGq!_He7vTztr*LEwPzN'
+dbname = DATA
+schemaname = PUBLIC
+warehousename = COMPUTE_WH
+rolename = ACCOUNTADMIN
+authenticator = externalbrowser
+
+#authenticator = <string> # Authenticator: 'snowflake', 'externalbrowser' (to use any IdP and a web browser),  https://<okta_account_name>.okta.com (to use Okta natively), 'oauth' to authenticate using OAuth.
+
