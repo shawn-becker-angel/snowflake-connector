@@ -351,14 +351,16 @@ def summarize_metadata_table_combos(metadata_table: str, metadata_table_columns:
 # queries using snowflake python connector
 def summarize_unqueriable_metadata_table_combinations():
     UNQUERIABLE_METADATA_TABLES = [
+        { "metadata_table": 'SEGMENT__ANGEL_MOBILE_RN_ANDROID_PROD__IDENTIFIES',
+          "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID'] },
         # { "metadata_table": 'SEGMENT__ANGEL_APP_IOS__IDENTIFIES', 
         #   "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID'] },
         # { "metadata_table": 'SEGMENT__ANGEL_FUNDING_PROD__IDENTIFIES', 
         #   "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID'] },
-        { "metadata_table": 'SEGMENT__ANGEL_NFT_WEBSITE_PROD__IDENTIFIES', 
-          "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID','RID_UUID'] },
-        # { "metadata_table": 'SEGMENT__ANGEL_WEB__IDENTIFIES', 
+        # { "metadata_table": 'SEGMENT__ANGEL_NFT_WEBSITE_PROD__IDENTIFIES', 
         #   "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID','RID_UUID'] },
+        { "metadata_table": 'SEGMENT__ANGEL_WEB__IDENTIFIES', 
+          "metadata_columns": ['USER_ID_UUID','USERNAME_UUID','PERSONA_UUID'] }
     ]
     for unqueriable in UNQUERIABLE_METADATA_TABLES:
         metadata_table = unqueriable['metadata_table']
@@ -427,7 +429,67 @@ def add_and_set_valid_uuid_columns(conn: connector=None, verbose: bool=True) -> 
             print(f"\nmanual run needed:\n{add_valid_uuid_query};")
             print(f"\nmanual run needed:\n{set_valid_uuid_query};")
 
-            
+# get the uuid counts for each segment_table
+def get_uuid_counts(conn: connector=None) -> List[Dict[str,Any]]:
+    uuid_counts = []
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    for segment_table_dict in get_segment_table_dicts(latest_df):
+        metadata_table = segment_table_dict['metadata_table']
+        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+        for uuid in ["VALID_UUID"]:
+            count = 0
+            query_name = f"{cloned_table} @ "
+            query = f"SELECT COUNT(*) FROM {cloned_table}"
+            if uuid != "blank":
+                query_name = f"{query_name}{uuid}"
+                query = f"{query} WHERE {uuid} IS NOT NULL"
+            try:
+                count = execute_count_query(query, conn=conn, verbose=True)
+            except Exception as e:
+                pass
+            if count == 0:
+                uuid_counts.append({ query_name: query })
+            else:
+                uuid_counts.append({ query_name: count })
+    return uuid_counts
+
+def set_remainder_valid_uuids(conn: connector=None, verbose: bool=True):
+    REMAINDERS = [
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_APP_IOS__IDENTIFIES @ USERNAME_UUID': 3},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_MOBILE_ANDROID_PROD__IDENTIFIES @ USERNAME_UUID': 314032},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_MOBILE_IOS_PROD__IDENTIFIES @ USERNAME_UUID': 691301},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_MOBILE_RN_ANDROID_PROD__IDENTIFIES @ USERNAME_UUID': 654},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_MOBILE_RN_IOS_PROD__IDENTIFIES @ USERNAME_UUID': 1114},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_TV_ANDROIDTV_PROD__IDENTIFIES @ USERNAME_UUID': 1116},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__PERSONAS_THE_CHOSEN_WEB__IDENTIFIES @ USERNAME_UUID': 1317782},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__THE_CHOSEN_APP_WEB_PROD__IDENTIFIES @ USERNAME_UUID': 52048},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__THE_CHOSEN_MOBILE_ANDROID_PROD__IDENTIFIES @ USERNAME_UUID': 2163192},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_FUNDING_PROD__IDENTIFIES @ USERNAME_UUID': 540},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_NFT_WEBSITE_PROD__IDENTIFIES @ PERSONA_UUID': 14665},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_TV_FIRETV_PROD__IDENTIFIES @ USERNAME_UUID': 6},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__ANGEL_WEB__IDENTIFIES @ USERNAME_UUID': 4547},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__PERSONAS_THE_CHOSEN_MOBILE__IDENTIFIES @ USERNAME_UUID': 279812},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__THE_CHOSEN_MOBILE_IOS_PROD__IDENTIFIES @ RID_UUID': 2050831},
+        {'SEGMENT.IDENTIFIES_METADATA.SEGMENT__THE_CHOSEN_APP_REACT_NATIVE_PROD__IDENTIFIES @ USERNAME_UUID': 279733}
+    ]
+    for remainder_dict in REMAINDERS:
+        for cloned_table_pair, count in remainder_dict.items():
+            pair = cloned_table_pair.split("@")
+            cloned_table, uuid = pair[0].strip(), pair[1].strip()
+            cnt_uuid_query = f"SELECT COUNT(*) FROM {cloned_table} WHERE {uuid} iS NOT NULL AND VALID_UUID IS NULL;"
+            set_uuid_query = f"UPDATE {cloned_table} SET VALID_UUID = {uuid} WHERE {uuid} IS NOT NULL AND VALID_UUID IS NULL;"
+            execute_count_query(cnt_uuid_query, conn=conn, verbose=True)
+            execute_single_query(set_uuid_query, conn=conn, verbose=True)
+   
+def count_null_valid_uuids(conn: connector=None) -> None:
+    [data_file,latest_df] = get_segment_table_dicts_df(load_latest=True)
+    for segment_table_dict in get_segment_table_dicts(latest_df):
+        metadata_table = segment_table_dict['metadata_table']
+        cloned_table = f"SEGMENT.IDENTIFIES_METADATA.{metadata_table}"
+        cnt_query = f"SELECT COUNT(*) FROM {cloned_table} WHERE VALID_UUID IS NULL;"
+        execute_count_query(cnt_query, conn=conn, verbose=True)
+
+              
 ################################################
 # Tests
 ################################################
@@ -438,7 +500,7 @@ def tests():
 def main():
     conn = create_connector()
     
-    add_and_set_valid_uuid_columns(conn=conn)
+    count_null_valid_uuids(conn=conn)
     
     print("done")
     

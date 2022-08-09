@@ -90,7 +90,7 @@ def execute_single_query(
     exc = None
     single_query = clean_query(single_query)
     if verbose:
-        print(f"execute_create_query.single_query:\n{single_query};")
+        print(f"execute_single_query:\n{single_query};")
     query_batch_iterator = query_batch_generator(single_query, conn=conn, timeout_seconds=timeout_seconds, batch_size=1, verbose=verbose)
     while True:
         try:
